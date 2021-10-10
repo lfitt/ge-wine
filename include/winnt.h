@@ -925,7 +925,8 @@ NTSYSAPI WORD         WINAPI RtlQueryDepthSList(PSLIST_HEADER);
 #define HEAP_SHARED                     0x04000000
 
 typedef enum _HEAP_INFORMATION_CLASS {
-    HeapCompatibilityInformation,
+    HeapCompatibilityInformation = 0,
+    HeapEnableTerminationOnCorruption = 1,
 } HEAP_INFORMATION_CLASS;
 
 /* Processor feature flags.  */
@@ -2230,6 +2231,7 @@ extern struct _TEB * WINAPI NtCurrentTeb(void);
 #define IO_REPARSE_TAG_CLOUD_MASK       __MSABI_LONG(0x0000F000)
 #define IO_REPARSE_TAG_APPEXECLINK      __MSABI_LONG(0x8000001B)
 #define IO_REPARSE_TAG_GVFS             __MSABI_LONG(0x9000001C)
+#define IO_REPARSE_TAG_LX_SYMLINK       __MSABI_LONG(0xA000001D)
 #define IO_REPARSE_TAG_STORAGE_SYNC     __MSABI_LONG(0x8000001E)
 #define IO_REPARSE_TAG_WCI_TOMBSTONE    __MSABI_LONG(0xA000001F)
 #define IO_REPARSE_TAG_UNHANDLED        __MSABI_LONG(0x80000020)
