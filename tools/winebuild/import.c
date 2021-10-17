@@ -1304,29 +1304,9 @@ void output_stubs( DLLSPEC *spec )
 
             output( "\tsubl $12,%%esp\n" );
             output_cfi( ".cfi_adjust_cfa_offset 12" );
-            if (UsePIC)
-            {
-                output( "\tcall %s\n", asm_name("__wine_spec_get_pc_thunk_eax") );
-                output( "1:" );
-                needs_get_pc_thunk = 1;
-                if (exp_name)
-                {
-                    output( "\tleal .L%s_string-1b(%%eax),%%ecx\n", name );
-                    output( "\tmovl %%ecx,4(%%esp)\n" );
-                }
-                else
-                    output( "\tmovl $%d,4(%%esp)\n", odp->ordinal );
-                output( "\tleal .L__wine_spec_file_name-1b(%%eax),%%ecx\n" );
-                output( "\tmovl %%ecx,(%%esp)\n" );
-            }
-            else
-            {
-                if (exp_name)
-                    output( "\tmovl $.L%s_string,4(%%esp)\n", name );
-                else
-                    output( "\tmovl $%d,4(%%esp)\n", odp->ordinal );
-                output( "\tmovl $.L__wine_spec_file_name,(%%esp)\n" );
-            }
+            output( "\t.byte 0xb8\n" );                               /* mov eax, SYSCALL */
+            output( "\t.long %d\n", i );
+            output( "\t.byte 0x64,0xff,0x15,0xc0,0x00,0x00,0x00\n" ); /* call dword ptr fs:[0C0h] */
             output( "\tcall %s\n", asm_name("__wine_spec_unimplemented_stub") );
             break;
         case CPU_x86_64:
@@ -1410,7 +1390,6 @@ static int cmp_link_name( const void *e1, const void *e2 )
     return strcmp( odp1->link_name, odp2->link_name );
 }
 
-
 /* output the functions for system calls */
 void output_syscalls( DLLSPEC *spec )
 {
@@ -1468,7 +1447,7 @@ void output_syscalls( DLLSPEC *spec )
              * validate that instruction, we can just put a jmp there instead. */
             output( "\t.byte 0x4c,0x8b,0xd1\n" ); /* movq %rcx,%r10 */
             output( "\t.byte 0xb8\n" );           /* movl $i,%eax */
-            output( "\t.long %u\n", id );
+            output( "\t.long %u\n", 0xf000 + id );
             output( "\t.byte 0xf6,0x04,0x25,0x08,0x03,0xfe,0x7f,0x01\n" ); /* testb $1,0x7ffe0308 */
             output( "\t.byte 0x75,0x03\n" );      /* jne 1f */
             output( "\t.byte 0x0f,0x05\n" );      /* syscall */
