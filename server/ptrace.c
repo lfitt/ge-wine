@@ -627,41 +627,74 @@ void set_thread_context( struct thread *thread, const context_t *context, unsign
 
     if (!suspend_for_ptrace( thread )) return;
 
-    /* force all breakpoint lengths to 1, workaround for kernel bug 200965 */
-    ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(7), 0x11110055 );
-
     switch (context->machine)
     {
     case IMAGE_FILE_MACHINE_I386:
-        /* Linux 2.6.33+ does DR0-DR3 alignment validation, so it has to know LEN bits first */
-        if (ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(7), context->debug.i386_regs.dr7 & 0xffff0000 ) == -1) goto error;
+        fprintf(stderr, "%04x:%04x DR_OFFSET(7), 0\n", thread->process->id, thread->id);
+        if (ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(7), 0 ) == -1) goto error;
+        fprintf(stderr, "%04x:%04x DR_OFFSET(0), %#zx\n", thread->process->id, thread->id, (size_t)context->debug.i386_regs.dr0);
         if (ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(0), context->debug.i386_regs.dr0 ) == -1) goto error;
+        fprintf(stderr, "%04x:%04x DR_OFFSET(1), %#zx\n", thread->process->id, thread->id, (size_t)context->debug.i386_regs.dr1);
         if (ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(1), context->debug.i386_regs.dr1 ) == -1) goto error;
+        fprintf(stderr, "%04x:%04x DR_OFFSET(2), %#zx\n", thread->process->id, thread->id, (size_t)context->debug.i386_regs.dr2);
         if (ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(2), context->debug.i386_regs.dr2 ) == -1) goto error;
+        fprintf(stderr, "%04x:%04x DR_OFFSET(3), %#zx\n", thread->process->id, thread->id, (size_t)context->debug.i386_regs.dr3);
         if (ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(3), context->debug.i386_regs.dr3 ) == -1) goto error;
+        fprintf(stderr, "%04x:%04x DR_OFFSET(6), %#zx\n", thread->process->id, thread->id, (size_t)context->debug.i386_regs.dr6);
         if (ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(6), context->debug.i386_regs.dr6 ) == -1) goto error;
         /* Linux 2.6.33+ needs enable bits set briefly to update value returned by PEEKUSER later */
+        fprintf(stderr, "%04x:%04x DR_OFFSET(7), %#zx\n", thread->process->id, thread->id, (size_t)context->debug.i386_regs.dr7 | 0x55);
         ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(7), context->debug.i386_regs.dr7 | 0x55 );
+        fprintf(stderr, "%04x:%04x DR_OFFSET(7), %#zx\n", thread->process->id, thread->id, (size_t)context->debug.i386_regs.dr7);
         if (ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(7), context->debug.i386_regs.dr7 ) == -1) goto error;
+        fprintf(stderr, "%04x:%04x DR_OFFSET(0), %#zx\n", thread->process->id, thread->id, (size_t)context->debug.i386_regs.dr0);
+        if (ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(0), context->debug.i386_regs.dr0 ) == -1) goto error;
+        fprintf(stderr, "%04x:%04x DR_OFFSET(1), %#zx\n", thread->process->id, thread->id, (size_t)context->debug.i386_regs.dr1);
+        if (ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(1), context->debug.i386_regs.dr1 ) == -1) goto error;
+        fprintf(stderr, "%04x:%04x DR_OFFSET(2), %#zx\n", thread->process->id, thread->id, (size_t)context->debug.i386_regs.dr2);
+        if (ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(2), context->debug.i386_regs.dr2 ) == -1) goto error;
+        fprintf(stderr, "%04x:%04x DR_OFFSET(3), %#zx\n", thread->process->id, thread->id, (size_t)context->debug.i386_regs.dr3);
+        if (ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(3), context->debug.i386_regs.dr3 ) == -1) goto error;
+        fprintf(stderr, "%04x:%04x DR_OFFSET(6), %#zx\n", thread->process->id, thread->id, (size_t)context->debug.i386_regs.dr6);
+        if (ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(6), context->debug.i386_regs.dr6 ) == -1) goto error;
         thread->system_regs |= SERVER_CTX_DEBUG_REGISTERS;
         break;
     case IMAGE_FILE_MACHINE_AMD64:
-        if (ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(7), context->debug.x86_64_regs.dr7 & 0xffff0000 ) == -1) goto error;
+        fprintf(stderr, "%04x:%04x DR_OFFSET(7), 0\n", thread->process->id, thread->id);
+        if (ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(7), 0 ) == -1) goto error;
+        fprintf(stderr, "%04x:%04x DR_OFFSET(0), %#zx\n", thread->process->id, thread->id, (size_t)context->debug.x86_64_regs.dr0);
         if (ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(0), context->debug.x86_64_regs.dr0 ) == -1) goto error;
+        fprintf(stderr, "%04x:%04x DR_OFFSET(1), %#zx\n", thread->process->id, thread->id, (size_t)context->debug.x86_64_regs.dr1);
         if (ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(1), context->debug.x86_64_regs.dr1 ) == -1) goto error;
+        fprintf(stderr, "%04x:%04x DR_OFFSET(2), %#zx\n", thread->process->id, thread->id, (size_t)context->debug.x86_64_regs.dr2);
         if (ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(2), context->debug.x86_64_regs.dr2 ) == -1) goto error;
+        fprintf(stderr, "%04x:%04x DR_OFFSET(3), %#zx\n", thread->process->id, thread->id, (size_t)context->debug.x86_64_regs.dr3);
         if (ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(3), context->debug.x86_64_regs.dr3 ) == -1) goto error;
+        fprintf(stderr, "%04x:%04x DR_OFFSET(6), %#zx\n", thread->process->id, thread->id, (size_t)context->debug.x86_64_regs.dr6);
         if (ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(6), context->debug.x86_64_regs.dr6 ) == -1) goto error;
+        fprintf(stderr, "%04x:%04x DR_OFFSET(7), %#zx\n", thread->process->id, thread->id, (size_t)context->debug.x86_64_regs.dr7 | 0x55);
         ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(7), context->debug.x86_64_regs.dr7 | 0x55 );
+        fprintf(stderr, "%04x:%04x DR_OFFSET(7), %#zx\n", thread->process->id, thread->id, (size_t)context->debug.x86_64_regs.dr7);
         if (ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(7), context->debug.x86_64_regs.dr7 ) == -1) goto error;
+        fprintf(stderr, "%04x:%04x DR_OFFSET(0), %#zx\n", thread->process->id, thread->id, (size_t)context->debug.x86_64_regs.dr0);
+        if (ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(0), context->debug.x86_64_regs.dr0 ) == -1) goto error;
+        fprintf(stderr, "%04x:%04x DR_OFFSET(1), %#zx\n", thread->process->id, thread->id, (size_t)context->debug.x86_64_regs.dr1);
+        if (ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(1), context->debug.x86_64_regs.dr1 ) == -1) goto error;
+        fprintf(stderr, "%04x:%04x DR_OFFSET(2), %#zx\n", thread->process->id, thread->id, (size_t)context->debug.x86_64_regs.dr2);
+        if (ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(2), context->debug.x86_64_regs.dr2 ) == -1) goto error;
+        fprintf(stderr, "%04x:%04x DR_OFFSET(3), %#zx\n", thread->process->id, thread->id, (size_t)context->debug.x86_64_regs.dr3);
+        if (ptrace( PTRACE_POKEUSER, pid, DR_OFFSET(3), context->debug.x86_64_regs.dr3 ) == -1) goto error;
+        fprintf(stderr, "%04x:%04x DR_OFFSET(6), %#zx\n", thread->process->id, thread->id, (size_t)context->debug.x86_64_regs.dr6);
         thread->system_regs |= SERVER_CTX_DEBUG_REGISTERS;
         break;
     default:
         set_error( STATUS_INVALID_PARAMETER );
     }
+    fprintf(stderr, "%04x:%04x all done\n", thread->process->id, thread->id);
     resume_after_ptrace( thread );
     return;
  error:
+    fprintf(stderr, "%04x:%04x error %u %m\n", thread->process->id, thread->id, errno);
     file_set_error();
     resume_after_ptrace( thread );
 }
