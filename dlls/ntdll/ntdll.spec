@@ -1631,6 +1631,8 @@
 @ stdcall __wine_ctrl_routine(ptr)
 @ extern __wine_syscall_dispatcher
 @ extern -arch=i386 __wine_ldt_copy
+@ cdecl __wine_set_unix_env(ptr ptr)
+@ cdecl __wine_unset_unix_env(ptr)
 
 # Debugging
 @ stdcall -syscall -norelay __wine_dbg_write(ptr long)
@@ -1638,6 +1640,9 @@
 @ cdecl -norelay __wine_dbg_header(long long str)
 @ cdecl -norelay __wine_dbg_output(str)
 @ cdecl -norelay __wine_dbg_strdup(str)
+
+# Virtual memory
+@ cdecl -syscall __wine_needs_override_large_address_aware()
 
 # Version
 @ cdecl wine_get_version()
@@ -1647,3 +1652,5 @@
 # Filesystem
 @ stdcall -syscall wine_nt_to_unix_file_name(ptr ptr ptr long)
 @ stdcall -syscall wine_unix_to_nt_file_name(str ptr ptr)
+
+@ cdecl IsTransgaming()
