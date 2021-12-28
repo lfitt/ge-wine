@@ -22,6 +22,8 @@
 #pragma makedep unix
 #endif
 
+#define _NTSYSTEM_
+
 #include <stdarg.h>
 #include <pthread.h>
 #include <math.h>

@@ -89,6 +89,8 @@
 #include "winioctl.h"
 #include "winternl.h"
 #include "unix_private.h"
+#include "esync.h"
+#include "fsync.h"
 #include "wine/list.h"
 #include "wine/debug.h"
 
@@ -349,6 +351,7 @@ static void * const syscalls[] =
     NtWriteVirtualMemory,
     NtYieldExecution,
     __wine_dbg_write,
+    __wine_needs_override_large_address_aware,
     __wine_unix_call,
     __wine_unix_spawnvp,
     wine_nt_to_unix_file_name,
@@ -523,10 +526,13 @@ static const char *get_pe_dir( WORD machine )
 
 static void set_dll_path(void)
 {
-    char *p, *path = getenv( "WINEDLLPATH" );
+    char *p, *path = getenv( "WINEDLLPATH" ), *be_runtime = getenv( "PROTON_BATTLEYE_RUNTIME" );
     int i, count = 0;
 
     if (path) for (p = path, count = 1; *p; p++) if (*p == ':') count++;
+
+    if (be_runtime)
+        count += 2;
 
     dll_paths = malloc( (count + 2) * sizeof(*dll_paths) );
     count = 0;
@@ -538,6 +544,24 @@ static void set_dll_path(void)
         path = strdup(path);
         for (p = strtok( path, ":" ); p; p = strtok( NULL, ":" )) dll_paths[count++] = strdup( p );
         free( path );
+    }
+
+    if (be_runtime)
+    {
+        const char lib32[] = "/v1/lib/wine/";
+        const char lib64[] = "/v1/lib64/wine/";
+
+        p = malloc( strlen(be_runtime) + strlen(lib32) + 1 );
+        strcpy(p, be_runtime);
+        strcat(p, lib32);
+
+        dll_paths[count++] = p;
+
+        p = malloc( strlen(be_runtime) + strlen(lib64) + 1 );
+        strcpy(p, be_runtime);
+        strcat(p, lib64);
+
+        dll_paths[count++] = p;
     }
 
     for (i = 0; i < count; i++) dll_path_maxlen = max( dll_path_maxlen, strlen(dll_paths[i]) );
@@ -1016,6 +1040,21 @@ static ULONG_PTR find_named_export( HMODULE module, const IMAGE_EXPORT_DIRECTORY
     return 0;
 }
 
+static ULONG_PTR find_pe_export( HMODULE module, const IMAGE_EXPORT_DIRECTORY *exports,
+                                 const IMAGE_IMPORT_BY_NAME *name )
+{
+    const WORD *ordinals = (const WORD *)((BYTE *)module + exports->AddressOfNameOrdinals);
+    const DWORD *names = (const DWORD *)((BYTE *)module + exports->AddressOfNames);
+
+    if (name->Hint < exports->NumberOfNames)
+    {
+        char *ename = (char *)module + names[name->Hint];
+        if (!strcmp( ename, (char *)name->Name ))
+            return find_ordinal_export( module, exports, ordinals[name->Hint] );
+    }
+    return find_named_export( module, exports, (char *)name->Name );
+}
+
 static inline void *get_rva( void *module, ULONG_PTR addr )
 {
     return (BYTE *)module + addr;
@@ -1035,6 +1074,49 @@ static const void *get_module_data_dir( HMODULE module, ULONG dir, ULONG *size )
     if (!data->VirtualAddress || !data->Size) return NULL;
     if (size) *size = data->Size;
     return get_rva( module, data->VirtualAddress );
+}
+
+static NTSTATUS fixup_ntdll_imports( const char *name, HMODULE module )
+{
+    const IMAGE_IMPORT_DESCRIPTOR *descr;
+    const IMAGE_THUNK_DATA *import_list;
+    IMAGE_THUNK_DATA *thunk_list;
+
+    if (!(descr = get_module_data_dir( module, IMAGE_FILE_IMPORT_DIRECTORY, NULL ))) return STATUS_SUCCESS;
+    for (; descr->Name && descr->FirstThunk; descr++)
+    {
+        thunk_list = get_rva( module, descr->FirstThunk );
+
+        /* ntdll must be the only import */
+        if (strcmp( get_rva( module, descr->Name ), "ntdll.dll" ))
+        {
+            ERR( "module %s is importing %s\n", debugstr_a(name), (char *)get_rva( module, descr->Name ));
+            return STATUS_PROCEDURE_NOT_FOUND;
+        }
+        if (descr->u.OriginalFirstThunk)
+            import_list = get_rva( module, descr->u.OriginalFirstThunk );
+        else
+            import_list = thunk_list;
+
+        while (import_list->u1.Ordinal)
+        {
+            if (IMAGE_SNAP_BY_ORDINAL( import_list->u1.Ordinal ))
+            {
+                int ordinal = IMAGE_ORDINAL( import_list->u1.Ordinal ) - ntdll_exports->Base;
+                thunk_list->u1.Function = find_ordinal_export( ntdll_module, ntdll_exports, ordinal );
+                if (!thunk_list->u1.Function) ERR( "%s: ntdll.%u not found\n", debugstr_a(name), ordinal );
+            }
+            else  /* import by name */
+            {
+                IMAGE_IMPORT_BY_NAME *pe_name = get_rva( module, import_list->u1.AddressOfData );
+                thunk_list->u1.Function = find_pe_export( ntdll_module, ntdll_exports, pe_name );
+                if (!thunk_list->u1.Function) ERR( "%s: ntdll.%s not found\n", debugstr_a(name), pe_name->Name );
+            }
+            import_list++;
+            thunk_list++;
+        }
+    }
+    return STATUS_SUCCESS;
 }
 
 static void load_ntdll_functions( HMODULE module )
@@ -1268,9 +1350,11 @@ static NTSTATUS dlopen_dll( const char *so_name, UNICODE_STRING *nt_name, void *
 {
     void *module, *handle;
     const IMAGE_NT_HEADERS *nt;
+    BOOL mapped = FALSE;
 
     callback_module = (void *)1;
-    handle = dlopen( so_name, RTLD_NOW );
+    if ((handle = dlopen( so_name, RTLD_NOW | RTLD_NOLOAD ))) mapped = TRUE;
+    else handle = dlopen( so_name, RTLD_NOW );
     if (!handle)
     {
         WARN( "failed to load .so lib %s: %s\n", debugstr_a(so_name), dlerror() );
@@ -1287,7 +1371,7 @@ static NTSTATUS dlopen_dll( const char *so_name, UNICODE_STRING *nt_name, void *
     {
         module = (HMODULE)((nt->OptionalHeader.ImageBase + 0xffff) & ~0xffff);
         if (get_builtin_so_handle( module )) goto already_loaded;
-        if (map_so_dll( nt, module ))
+        if (!mapped && map_so_dll( nt, module ))
         {
             dlclose( handle );
             return STATUS_NO_MEMORY;
@@ -1320,6 +1404,38 @@ already_loaded:
     *ret_module = module;
     dlclose( handle );
     return STATUS_SUCCESS;
+}
+
+
+/***********************************************************************
+ *           init_unix_lib
+ */
+static NTSTATUS CDECL init_unix_lib( void *module, DWORD reason, const void *ptr_in, void *ptr_out )
+{
+    NTSTATUS (CDECL *init_func)( HMODULE, DWORD, const void *, void * );
+    const IMAGE_NT_HEADERS *nt;
+    const char *name;
+    void *handle, *entry, *unix_module;
+    NTSTATUS status;
+
+    if ((status = get_builtin_unix_info( module, &name, &handle, &entry ))) return status;
+
+    if (!entry)
+    {
+        if (!name || !handle) return STATUS_DLL_NOT_FOUND;
+
+        if (!(nt = dlsym( handle, "__wine_spec_nt_header" )) ||
+            !(entry = dlsym( handle, "__wine_init_unix_lib" )))
+            return STATUS_INVALID_IMAGE_FORMAT;
+
+        TRACE( "loaded %s for %p\n", debugstr_a(name), module );
+        unix_module = (void *)((nt->OptionalHeader.ImageBase + 0xffff) & ~0xffff);
+        map_so_dll( nt, unix_module );
+        fixup_ntdll_imports( name, unix_module );
+        set_builtin_unix_entry( module, entry );
+    }
+    init_func = entry;
+    return init_func( module, reason, ptr_in, ptr_out );
 }
 
 
@@ -1623,8 +1739,13 @@ static NTSTATUS find_builtin_dll( UNICODE_STRING *nt_name, void **module, SIZE_T
 done:
     if (status >= 0 && ext)
     {
+        void *handle;
+
         strcpy( ext, ".so" );
-        load_builtin_unixlib( *module, ptr );
+        if ((handle = dlopen( ptr, RTLD_NOW )))
+        {
+            if (set_builtin_unix_handle( *module, ptr, handle )) dlclose( handle );
+        }
     }
     free( file );
     return status;
@@ -2053,6 +2174,92 @@ static ULONG_PTR get_image_address(void)
 }
 
 
+static void *steamclient_srcs[128];
+static void *steamclient_tgts[128];
+static int steamclient_count;
+
+void *steamclient_handle_fault( LPCVOID addr, DWORD err )
+{
+    int i;
+
+    if (!(err & EXCEPTION_EXECUTE_FAULT)) return NULL;
+
+    for (i = 0; i < steamclient_count; ++i)
+    {
+        if (addr == steamclient_srcs[i])
+            return steamclient_tgts[i];
+    }
+
+    return NULL;
+}
+
+static void steamclient_write_jump(void *src_addr, void *tgt_addr)
+{
+#ifdef _WIN64
+    static const char mov[] = {0x48, 0xb8};
+#else
+    static const char mov[] = {0xb8};
+#endif
+    static const char jmp[] = {0xff, 0xe0};
+    memcpy(src_addr, mov, sizeof(mov));
+    memcpy((char *)src_addr + sizeof(mov), &tgt_addr, sizeof(tgt_addr));
+    memcpy((char *)src_addr + sizeof(mov) + sizeof(tgt_addr), jmp, sizeof(jmp));
+}
+
+static void CDECL steamclient_setup_trampolines(HMODULE src_mod, HMODULE tgt_mod)
+{
+    static int noexec_cached = -1;
+
+    SYSTEM_BASIC_INFORMATION info;
+    IMAGE_NT_HEADERS *src_nt = (IMAGE_NT_HEADERS *)((UINT_PTR)src_mod + ((IMAGE_DOS_HEADER *)src_mod)->e_lfanew);
+    IMAGE_NT_HEADERS *tgt_nt = (IMAGE_NT_HEADERS *)((UINT_PTR)tgt_mod + ((IMAGE_DOS_HEADER *)tgt_mod)->e_lfanew);
+    IMAGE_SECTION_HEADER *src_sec = (IMAGE_SECTION_HEADER *)(src_nt + 1);
+    const IMAGE_EXPORT_DIRECTORY *src_exp = get_module_data_dir(src_mod, IMAGE_FILE_EXPORT_DIRECTORY, NULL), *tgt_exp = get_module_data_dir(tgt_mod, IMAGE_FILE_EXPORT_DIRECTORY, NULL);
+    const DWORD *names;
+    SIZE_T size;
+    void *addr, *src_addr, *tgt_addr;
+    char *name, *wsne;
+    UINT_PTR page_mask;
+    int i;
+
+    if (noexec_cached == -1)
+        noexec_cached = (wsne = getenv("WINESTEAMNOEXEC")) && atoi(wsne);
+
+    virtual_get_system_info(&info, FALSE);
+    page_mask = info.PageSize - 1;
+
+    for (i = 0; i < src_nt->FileHeader.NumberOfSections; ++i)
+    {
+        if (memcmp(src_sec[i].Name, ".text", 5)) continue;
+        addr = (void *)(((UINT_PTR)src_mod + src_sec[i].VirtualAddress) & ~page_mask);
+        size = (src_sec[i].Misc.VirtualSize + page_mask) & ~page_mask;
+        if (noexec_cached) mprotect(addr, size, PROT_READ);
+        else mprotect(addr, size, PROT_READ|PROT_WRITE|PROT_EXEC);
+    }
+
+    names = (const DWORD *)((UINT_PTR)src_mod + src_exp->AddressOfNames);
+    for (i = 0; i < src_exp->NumberOfNames; ++i)
+    {
+        if (!names[i] || !(name = (char *)((UINT_PTR)src_mod + names[i]))) continue;
+        if (!(src_addr = (void *)find_named_export(src_mod, src_exp, name))) continue;
+        if (!(tgt_addr = (void *)find_named_export(tgt_mod, tgt_exp, name))) continue;
+        assert(steamclient_count < ARRAY_SIZE(steamclient_srcs));
+        steamclient_srcs[steamclient_count] = src_addr;
+        steamclient_tgts[steamclient_count] = tgt_addr;
+        if (!noexec_cached) steamclient_write_jump(src_addr, tgt_addr);
+        else steamclient_count++;
+    }
+
+    src_addr = (void *)((UINT_PTR)src_mod + src_nt->OptionalHeader.AddressOfEntryPoint);
+    tgt_addr = (void *)((UINT_PTR)tgt_mod + tgt_nt->OptionalHeader.AddressOfEntryPoint);
+    assert(steamclient_count < ARRAY_SIZE(steamclient_srcs));
+    steamclient_srcs[steamclient_count] = src_addr;
+    steamclient_tgts[steamclient_count] = tgt_addr;
+    if (!noexec_cached) steamclient_write_jump(src_addr, tgt_addr);
+    else steamclient_count++;
+}
+
+
 /***********************************************************************
  *           unix_funcs
  */
@@ -2060,13 +2267,37 @@ static struct unix_funcs unix_funcs =
 {
     load_so_dll,
     init_builtin_dll,
+    init_unix_lib,
     unwind_builtin_dll,
     RtlGetSystemTimePrecise,
 #ifdef __aarch64__
     NtCurrentTeb,
 #endif
+    steamclient_setup_trampolines,
+    set_unix_env,
+    unset_unix_env,
 };
 
+BOOL ac_odyssey;
+
+static void hacks_init(void)
+{
+    static const char ac_odyssey_exe[] = "ACOdyssey.exe";
+    char cur_exe[MAX_PATH];
+    DWORD cur_exe_len;
+    int fd;
+
+    fd = open("/proc/self/comm", O_RDONLY);
+    cur_exe_len = read(fd, cur_exe, sizeof(cur_exe));
+    close(fd);
+    cur_exe[cur_exe_len - 1] = 0;
+
+    if (!strcasecmp(cur_exe, ac_odyssey_exe))
+    {
+        ERR("HACK: AC Odyssey sync tweak on.\n");
+        ac_odyssey = TRUE;
+    }
+}
 
 /***********************************************************************
  *           start_main_thread
@@ -2082,6 +2313,9 @@ static void start_main_thread(void)
     signal_init_thread( teb );
     dbg_init();
     startup_info_size = server_init_process();
+    hacks_init();
+    fsync_init();
+    esync_init();
     virtual_map_user_shared_data();
     init_cpu_info();
     init_files();
@@ -2423,6 +2657,8 @@ void __wine_main( int argc, char *argv[], char *envp[] )
 #endif
 
     virtual_init();
+    signal_init_early();
+
     init_environment( argc, argv, envp );
 
 #ifdef __APPLE__
