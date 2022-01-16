@@ -55,6 +55,18 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, void *reserved)
     return TRUE;
 }
 
+static BOOL is_re8(void)
+{
+    static int status = -1;
+
+    if(status < 0){
+        const char *sgi = getenv("SteamGameId");
+        status = sgi && !strcmp(sgi, "1196590");
+    }
+
+    return status != 0;
+}
+
 HRESULT WINAPI CreateDXGIFactory2(UINT flags, REFIID iid, void **factory)
 {
     TRACE("flags %#x, iid %s, factory %p.\n", flags, debugstr_guid(iid), factory);
@@ -68,6 +80,9 @@ HRESULT WINAPI CreateDXGIFactory2(UINT flags, REFIID iid, void **factory)
 HRESULT WINAPI CreateDXGIFactory1(REFIID iid, void **factory)
 {
     TRACE("iid %s, factory %p.\n", debugstr_guid(iid), factory);
+
+    if(is_re8())
+        return get_re8_dxgi_factory(iid, factory);
 
     return dxgi_factory_create(iid, factory, TRUE);
 }
@@ -105,8 +120,8 @@ static HRESULT register_d3d10core_layers(HMODULE d3d10core)
 
     if (!dxgi_main.d3d10core)
     {
-        HRESULT hr;
-        HRESULT (WINAPI *d3d11core_register_layers)(void);
+        HRESULT hr = E_FAIL;
+        HRESULT (WINAPI *register_layers)(void);
         HMODULE mod;
         BOOL ret;
 
@@ -116,8 +131,10 @@ static HRESULT register_d3d10core_layers(HMODULE d3d10core)
             return E_FAIL;
         }
 
-        d3d11core_register_layers = (void *)GetProcAddress(mod, "D3D11CoreRegisterLayers");
-        hr = d3d11core_register_layers();
+        if ((register_layers = (void *)GetProcAddress(mod, "D3D11CoreRegisterLayers")) ||
+            (register_layers = (void *)GetProcAddress(mod, "D3D10CoreRegisterLayers")))
+            hr = register_layers();
+
         if (FAILED(hr))
         {
             ERR("Failed to register d3d11 layers, returning %#x.\n", hr);
@@ -250,8 +267,6 @@ HRESULT WINAPI DXGID3D10RegisterLayers(const struct dxgi_device_layer *layers, U
 
 HRESULT WINAPI DXGIGetDebugInterface1(UINT flags, REFIID iid, void **debug)
 {
-    TRACE("flags %#x, iid %s, debug %p.\n", flags, debugstr_guid(iid), debug);
-
     WARN("Returning DXGI_ERROR_SDK_COMPONENT_MISSING.\n");
     return DXGI_ERROR_SDK_COMPONENT_MISSING;
 }
