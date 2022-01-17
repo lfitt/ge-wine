@@ -982,6 +982,10 @@ static BOOL CDECL nulldrv_SystemParametersInfo( UINT action, UINT int_param, voi
     return FALSE;
 }
 
+static void CDECL nulldrv_UpdateCandidatePos( HWND hwnd, const RECT *caret_rect )
+{
+}
+
 static void CDECL nulldrv_ThreadDetach( void )
 {
 }
@@ -1125,6 +1129,7 @@ void CDECL __wine_set_display_driver( struct user_driver_funcs *driver, UINT ver
     SET_USER_FUNC(WindowPosChanging);
     SET_USER_FUNC(WindowPosChanged);
     SET_USER_FUNC(SystemParametersInfo);
+    SET_USER_FUNC(UpdateCandidatePos);
     SET_USER_FUNC(ThreadDetach);
 #undef SET_USER_FUNC
 

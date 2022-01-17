@@ -321,6 +321,8 @@ struct user_driver_funcs
                                        const RECT *,struct window_surface*);
     /* system parameters */
     BOOL    (CDECL *pSystemParametersInfo)(UINT,UINT,void*,UINT);
+    /* IME functions */
+    void    (CDECL *pUpdateCandidatePos)(HWND, const RECT *);
     /* thread management */
     void    (CDECL *pThreadDetach)(void);
 };
