@@ -896,6 +896,10 @@ static BOOL CDECL nulldrv_ScrollDC( HDC hdc, INT dx, INT dy, HRGN update )
                         hdc, rect.left - dx, rect.top - dy, SRCCOPY, 0, 0 );
 }
 
+static void CDECL nulldrv_SetActiveWindow( HWND hwnd )
+{
+}
+
 static void CDECL nulldrv_SetCapture( HWND hwnd, UINT flags )
 {
 }
@@ -966,6 +970,10 @@ static void CDECL nulldrv_WindowPosChanged( HWND hwnd, HWND insert_after, UINT s
 static BOOL CDECL nulldrv_SystemParametersInfo( UINT action, UINT int_param, void *ptr_param, UINT flags )
 {
     return FALSE;
+}
+
+static void CDECL nulldrv_UpdateCandidatePos( HWND hwnd, const RECT *caret_rect )
+{
 }
 
 static void CDECL nulldrv_ThreadDetach( void )
@@ -1102,6 +1110,7 @@ void CDECL __wine_set_display_driver( struct user_driver_funcs *driver, UINT ver
     SET_USER_FUNC(MsgWaitForMultipleObjectsEx);
     SET_USER_FUNC(ReleaseDC);
     SET_USER_FUNC(ScrollDC);
+    SET_USER_FUNC(SetActiveWindow);
     SET_USER_FUNC(SetCapture);
     SET_USER_FUNC(SetFocus);
     SET_USER_FUNC(SetLayeredWindowAttributes);
@@ -1117,6 +1126,7 @@ void CDECL __wine_set_display_driver( struct user_driver_funcs *driver, UINT ver
     SET_USER_FUNC(WindowPosChanging);
     SET_USER_FUNC(WindowPosChanged);
     SET_USER_FUNC(SystemParametersInfo);
+    SET_USER_FUNC(UpdateCandidatePos);
     SET_USER_FUNC(ThreadDetach);
 #undef SET_USER_FUNC
 

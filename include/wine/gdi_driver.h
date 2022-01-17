@@ -167,7 +167,7 @@ struct gdi_dc_funcs
 };
 
 /* increment this when you change the DC function table */
-#define WINE_GDI_DRIVER_VERSION 73
+#define WINE_GDI_DRIVER_VERSION 74
 
 #define GDI_PRIORITY_NULL_DRV        0  /* null driver */
 #define GDI_PRIORITY_FONT_DRV      100  /* any font driver */
@@ -302,6 +302,7 @@ struct user_driver_funcs
     DWORD   (CDECL *pMsgWaitForMultipleObjectsEx)(DWORD,const HANDLE*,DWORD,DWORD,DWORD);
     void    (CDECL *pReleaseDC)(HWND,HDC);
     BOOL    (CDECL *pScrollDC)(HDC,INT,INT,HRGN);
+    void    (CDECL *pSetActiveWindow)(HWND);
     void    (CDECL *pSetCapture)(HWND,UINT);
     void    (CDECL *pSetFocus)(HWND);
     void    (CDECL *pSetLayeredWindowAttributes)(HWND,COLORREF,BYTE,DWORD);
@@ -320,6 +321,8 @@ struct user_driver_funcs
                                        const RECT *,struct window_surface*);
     /* system parameters */
     BOOL    (CDECL *pSystemParametersInfo)(UINT,UINT,void*,UINT);
+    /* IME functions */
+    void    (CDECL *pUpdateCandidatePos)(HWND, const RECT *);
     /* thread management */
     void    (CDECL *pThreadDetach)(void);
 };
