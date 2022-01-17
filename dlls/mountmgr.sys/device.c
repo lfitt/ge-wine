@@ -1036,8 +1036,8 @@ static NTSTATUS set_volume_info( struct volume *volume, struct dos_drive *drive,
         id = disk_device->unix_mount;
         id_len = strlen( disk_device->unix_mount ) + 1;
     }
-    if (volume->mount) set_mount_point_id( volume->mount, id, id_len );
-    if (drive && drive->mount) set_mount_point_id( drive->mount, id, id_len );
+    if (volume->mount) set_mount_point_id( volume->mount, id, id_len, -1 );
+    if (drive && drive->mount) set_mount_point_id( drive->mount, id, id_len, drive->drive );
 
     return STATUS_SUCCESS;
 }
@@ -1615,6 +1615,69 @@ static NTSTATUS query_property( struct disk_device *device, IRP *irp )
     return status;
 }
 
+static DWORD get_fs_flags( struct volume *volume )
+{
+#if 0
+/*#if defined(__NR_renameat2) || defined(RENAME_SWAP)*/
+#if defined(HAVE_FSTATFS)
+    struct statfs stfs;
+#elif defined(HAVE_FSTATVFS)
+    struct statvfs stfs;
+#endif
+    int fd;
+
+    if ((fd = open_volume_file( volume, "" )) == -1)
+        return 0;
+#if defined(HAVE_FSTATFS)
+    if (fstatfs(fd, &stfs))
+        return 0;
+#elif defined(HAVE_FSTATVFS)
+    if (fstatvfs(fd, &stfs))
+        return 0;
+#endif
+    close( fd );
+#if defined(HAVE_FSTATFS) && defined(linux)
+    switch (stfs.f_type)
+    {
+    case 0x6969:      /* nfs */
+    case 0xff534d42:  /* cifs */
+    case 0x564c:      /* ncpfs */
+    case 0x01021994:  /* tmpfs */
+    case 0x28cd3d45:  /* cramfs */
+    case 0x1373:      /* devfs */
+    case 0x9fa0:      /* procfs */
+    case 0xef51:      /* old ext2 */
+    case 0xef53:      /* ext2/3/4 */
+    case 0x4244:      /* hfs */
+    case 0xf995e849:  /* hpfs */
+    case 0x5346544e:  /* ntfs */
+        return FILE_SUPPORTS_REPARSE_POINTS;
+    default:
+        break;
+    }
+#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__OpenBSD__) || defined(__DragonFly__) || defined(__APPLE__) || defined(__NetBSD__)
+    if (!strcmp("apfs", stfs.f_fstypename) ||
+        !strcmp("nfs", stfs.f_fstypename) ||
+        !strcmp("cifs", stfs.f_fstypename) ||
+        !strcmp("ncpfs", stfs.f_fstypename) ||
+        !strcmp("tmpfs", stfs.f_fstypename) ||
+        !strcmp("cramfs", stfs.f_fstypename) ||
+        !strcmp("devfs", stfs.f_fstypename) ||
+        !strcmp("procfs", stfs.f_fstypename) ||
+        !strcmp("ext2", stfs.f_fstypename) ||
+        !strcmp("ext3", stfs.f_fstypename) ||
+        !strcmp("ext4", stfs.f_fstypename) ||
+        !strcmp("hfs", stfs.f_fstypename) ||
+        !strcmp("hpfs", stfs.f_fstypename) ||
+        !strcmp("ntfs", stfs.f_fstypename))
+    {
+        return FILE_SUPPORTS_REPARSE_POINTS;
+    }
+#endif
+#endif
+    return 0;
+}
+
 static NTSTATUS WINAPI harddisk_query_volume( DEVICE_OBJECT *device, IRP *irp )
 {
     IO_STACK_LOCATION *irpsp = IoGetCurrentIrpStackLocation( irp );
@@ -1695,7 +1758,8 @@ static NTSTATUS WINAPI harddisk_query_volume( DEVICE_OBJECT *device, IRP *irp )
             break;
         default:
             fsname = L"NTFS";
-            info->FileSystemAttributes = FILE_CASE_PRESERVED_NAMES | FILE_PERSISTENT_ACLS;
+            info->FileSystemAttributes = FILE_CASE_PRESERVED_NAMES | FILE_PERSISTENT_ACLS
+                                         | get_fs_flags( volume );
             info->MaximumComponentNameLength = 255;
             break;
         }
@@ -1837,7 +1901,7 @@ static BOOL create_port_device( DRIVER_OBJECT *driver, int n, const char *unix_p
     UNICODE_STRING nt_name, symlink_name, default_name;
     DEVICE_OBJECT *dev_obj;
     NTSTATUS status;
-    struct set_dosdev_symlink_params params = { dosdevices_path, unix_path };
+    struct set_dosdev_symlink_params params = { dosdevices_path, unix_path, driver == serial_driver };
 
     /* create DOS device */
     if (MOUNTMGR_CALL( set_dosdev_symlink, &params )) return FALSE;
