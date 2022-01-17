@@ -611,22 +611,8 @@ HKL WINAPI NtUserActivateKeyboardLayout( HKL layout, UINT flags )
  */
 UINT WINAPI NtUserGetKeyboardLayoutList( INT size, HKL *layouts )
 {
-    char buffer[4096];
-    KEY_NODE_INFORMATION *key_info = (KEY_NODE_INFORMATION *)buffer;
-    KEY_VALUE_PARTIAL_INFORMATION *value_info = (KEY_VALUE_PARTIAL_INFORMATION *)buffer;
-    DWORD count, tmp, i = 0;
-    HKEY hkey, subkey;
+    DWORD count;
     HKL layout;
-
-    static const WCHAR keyboard_layouts_keyW[] =
-    {
-        '\\','R','e','g','i','s','t','r','y',
-        '\\','M','a','c','h','i','n','e',
-        '\\','S','y','s','t','e','m',
-        '\\','C','u','r','r','e','n','t','C','o','n','t','r','o','l','S','e','t',
-        '\\','C','o','n','t','r','o','l',
-        '\\','K','e','y','b','o','a','r','d',' ','L','a','y','o','u','t','s'
-    };
 
     TRACE_(keyboard)( "size %d, layouts %p.\n", size, layouts );
 
@@ -639,33 +625,6 @@ UINT WINAPI NtUserGetKeyboardLayoutList( INT size, HKL *layouts )
     if (size && layouts)
     {
         layouts[count - 1] = layout;
-        if (count == size) return count;
-    }
-
-    if ((hkey = reg_open_key( NULL, keyboard_layouts_keyW, sizeof(keyboard_layouts_keyW) )))
-    {
-        while (!NtEnumerateKey( hkey, i++, KeyNodeInformation, key_info,
-                                sizeof(buffer) - sizeof(WCHAR), &tmp ))
-        {
-            if (!(subkey = reg_open_key( hkey, key_info->Name, key_info->NameLength ))) continue;
-            key_info->Name[key_info->NameLength / sizeof(WCHAR)] = 0;
-            tmp = wcstoul( key_info->Name, NULL, 16 );
-            if (query_reg_ascii_value( subkey, "Layout Id", value_info, sizeof(buffer) ) &&
-                value_info->Type == REG_SZ)
-                tmp = MAKELONG( LOWORD( tmp ),
-                                0xf000 | (wcstoul( (const WCHAR *)value_info->Data, NULL, 16 ) & 0xfff) );
-            NtClose( subkey );
-
-            if (layout == UlongToHandle( tmp )) continue;
-
-            count++;
-            if (size && layouts)
-            {
-                layouts[count - 1] = UlongToHandle( tmp );
-                if (count == size) break;
-            }
-        }
-        NtClose( hkey );
     }
 
     return count;
