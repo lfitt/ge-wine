@@ -169,6 +169,13 @@ int WINAPI getaddrinfo( const char *node, const char *service,
 
     if (node)
     {
+        if (!strcmp(node, "download-alt.easyanticheat.net"))
+        {
+            ERR("HACK: failing download-alt.easyanticheat.net resolution.\n");
+            SetLastError(WSAHOST_NOT_FOUND);
+            return WSAHOST_NOT_FOUND;
+        }
+
         if (!node[0])
         {
             if (!(fqdn = get_fqdn())) return WSA_NOT_ENOUGH_MEMORY;
@@ -924,6 +931,13 @@ struct hostent * WINAPI gethostbyname( const char *name )
     if (!num_startup)
     {
         SetLastError( WSANOTINITIALISED );
+        return NULL;
+    }
+
+    if (name && !strcmp(name, "download-alt.easyanticheat.net"))
+    {
+        ERR("HACK: failing download-alt.easyanticheat.net resolution.\n");
+        SetLastError( WSAHOST_NOT_FOUND );
         return NULL;
     }
 

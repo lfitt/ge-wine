@@ -1,0 +1,181 @@
+--- include/msxml2.idl
++++ include/msxml2.idl
+@@ -1612,15 +1612,6 @@ coclass FreeThreadedDOMDocument40
+     [default, source] dispinterface XMLDOMDocumentEvents;
+ }
+ 
+-[
+-    uuid(88d96a06-f192-11d4-a65f-0040963251e5),
+-]
+-coclass FreeThreadedDOMDocument60
+-{
+-    [default] interface IXMLDOMDocument3;
+-    [default, source] dispinterface XMLDOMDocumentEvents;
+-}
+-
+ [
+     helpstring("Free threaded XML DOM Document"),
+     progid("Msxml2.FreeThreadedDOMDocument"),
+@@ -1662,14 +1653,6 @@ coclass XMLHTTP40
+     [default] interface IXMLHTTPRequest;
+ }
+ 
+-[
+-    uuid(88d96a0a-f192-11d4-a65f-0040963251e5)
+-]
+-coclass XMLHTTP60
+-{
+-    [default] interface IXMLHTTPRequest;
+-}
+-
+ [
+     helpstring("XML HTTP"),
+     progid("Msxml2.XMLHTTP"),
+@@ -1702,14 +1685,6 @@ coclass ServerXMLHTTP40
+     [default] interface IServerXMLHTTPRequest2;
+ }
+ 
+-[
+-    uuid(88d96a0b-f192-11d4-a65f-0040963251e5)
+-]
+-coclass ServerXMLHTTP60
+-{
+-    [default] interface IServerXMLHTTPRequest2;
+-}
+-
+ [
+     helpstring("Server XML HTTP"),
+     progid("Msxml2.ServerXMLHTTP"),
+@@ -1750,14 +1725,6 @@ coclass XMLSchemaCache40
+     [default] interface IXMLDOMSchemaCollection2;
+ }
+ 
+-[
+-    uuid(88d96a07-f192-11d4-a65f-0040963251e5)
+-]
+-coclass XMLSchemaCache60
+-{
+-    [default] interface IXMLDOMSchemaCollection2;
+-}
+-
+ [
+     helpstring("XML Schema Cache"),
+     progid("Msxml2.XMLSchemaCache"),
+@@ -1798,14 +1765,6 @@ coclass XSLTemplate40
+     [default] interface IXSLTemplate;
+ }
+ 
+-[
+-    uuid(88d96a08-f192-11d4-a65f-0040963251e5)
+-]
+-coclass XSLTemplate60
+-{
+-    [default] interface IXSLTemplate;
+-}
+-
+ [
+     helpstring("XSL Template"),
+     progid("Msxml2.XSLTemplate"),
+@@ -3297,15 +3256,6 @@ coclass SAXXMLReader40
+     interface ISAXXMLReader;
+ }
+ 
+-[
+-    uuid(88d96a0c-f192-11d4-a65f-0040963251e5)
+-]
+-coclass SAXXMLReader60
+-{
+-    [default] interface IVBSAXXMLReader;
+-    interface ISAXXMLReader;
+-}
+-
+ [
+     helpstring("SAX XML Reader"),
+     progid("Msxml2.SAXXMLReader"),
+@@ -3380,26 +3330,6 @@ coclass MXHTMLWriter40
+     interface IVBSAXLexicalHandler;
+ }
+ 
+-[
+-    uuid(88d96a10-f192-11d4-a65f-0040963251e5)
+-]
+-coclass MXHTMLWriter60
+-{
+-    [default] interface IMXWriter;
+-
+-    interface ISAXContentHandler;
+-    interface ISAXDeclHandler;
+-    interface ISAXDTDHandler;
+-    interface ISAXErrorHandler;
+-    interface ISAXLexicalHandler;
+-
+-    interface IVBSAXContentHandler;
+-    interface IVBSAXDeclHandler;
+-    interface IVBSAXDTDHandler;
+-    interface IVBSAXErrorHandler;
+-    interface IVBSAXLexicalHandler;
+-}
+-
+ [
+     helpstring("MXXMLWriter 3.0"),
+     progid("Msxml2.MXXMLWriter.3.0"),
+@@ -3444,26 +3374,6 @@ coclass MXXMLWriter40
+     interface IVBSAXLexicalHandler;
+ }
+ 
+-[
+-    uuid(88d96a0f-f192-11d4-a65f-0040963251e5)
+-]
+-coclass MXXMLWriter60
+-{
+-    [default] interface IMXWriter;
+-
+-    interface ISAXContentHandler;
+-    interface ISAXDeclHandler;
+-    interface ISAXDTDHandler;
+-    interface ISAXErrorHandler;
+-    interface ISAXLexicalHandler;
+-
+-    interface IVBSAXContentHandler;
+-    interface IVBSAXDeclHandler;
+-    interface IVBSAXDTDHandler;
+-    interface IVBSAXErrorHandler;
+-    interface IVBSAXLexicalHandler;
+-}
+-
+ [
+     helpstring("MXXMLWriter"),
+     progid("Msxml2.MXXMLWriter"),
+@@ -3506,15 +3416,6 @@ coclass MXNamespaceManager40
+     interface IMXNamespaceManager;
+ }
+ 
+-[
+-    uuid(88d96a11-f192-11d4-a65f-0040963251e5)
+-]
+-coclass MXNamespaceManager60
+-{
+-    [default] interface IVBMXNamespaceManager;
+-    interface IMXNamespaceManager;
+-}
+-
+ [
+     helpstring("SAXAttributes 3.0"),
+     progid("Msxml2.SAXAttributes.3.0"),
+@@ -3539,16 +3440,6 @@ coclass SAXAttributes40
+     interface ISAXAttributes;
+ }
+ 
+-[
+-    uuid(88d96a0e-f192-11d4-a65f-0040963251e5)
+-]
+-coclass SAXAttributes60
+-{
+-    [default] interface IMXAttributes;
+-    interface IVBSAXAttributes;
+-    interface ISAXAttributes;
+-}
+-
+ [
+     helpstring("SAXAttributes"),
+     progid("Msxml2.SAXAttributes"),

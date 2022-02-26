@@ -29,7 +29,6 @@ enum
     /* user32 callbacks */
     NtUserCallEnumDisplayMonitor,
     NtUserCallWinEventHook,
-    NtUserCallWindowsHook,
     /* win16 hooks */
     NtUserCallFreeIcon,
     /* Vulkan support */
@@ -49,7 +48,7 @@ struct enum_display_monitor_params
 };
 
 /* NtUserCallWinEventHook params */
-struct win_event_hook_params
+struct win_hook_proc_params
 {
     DWORD event;
     HWND hwnd;
@@ -57,22 +56,6 @@ struct win_event_hook_params
     LONG child_id;
     void *handle;
     WINEVENTPROC proc;
-    WCHAR module[MAX_PATH];
-};
-
-/* NtUserCallWindowsHook params */
-struct win_hook_params
-{
-    void *proc;
-    void *handle;
-    DWORD pid;
-    DWORD tid;
-    int id;
-    int code;
-    WPARAM wparam;
-    LPARAM lparam;
-    BOOL prev_unicode;
-    BOOL next_unicode;
     WCHAR module[MAX_PATH];
 };
 
@@ -98,19 +81,15 @@ enum
     NtUserGetClipCursor,
     NtUserGetCursorPos,
     NtUserGetIconParam,
-    NtUserGetPrimaryMonitorRect,
     NtUserGetSysColor,
     NtUserGetSysColorBrush,
     NtUserGetSysColorPen,
     NtUserGetSystemMetrics,
-    NtUserGetVirtualScreenRect,
     NtUserMessageBeep,
     NtUserRealizePalette,
     /* temporary exports */
-    NtUserCallHooks,
     NtUserFlushWindowSurfaces,
     NtUserGetDeskPattern,
-    NtUserHandleInternalMessage,
     NtUserIncrementKeyStateCounter,
     NtUserLock,
     NtUserNextThreadWindow,
@@ -132,18 +111,6 @@ enum
     NtUserGetHandlePtr,
     NtUserRegisterWindowSurface,
     NtUserSetHandlePtr,
-};
-
-/* NtUserCallHwnd codes, not compatible with Windows */
-enum
-{
-    NtUserIsWindow,
-};
-
-/* NtUserCallHwndParam codes, not compatible with Windows */
-enum
-{
-    NtUserGetWindowThread,
 };
 
 /* color index used to retrieve system 55aa brush */
@@ -204,9 +171,6 @@ BOOL    WINAPI NtUserAddClipboardFormatListener( HWND hwnd );
 BOOL    WINAPI NtUserAttachThreadInput( DWORD from, DWORD to, BOOL attach );
 NTSTATUS WINAPI NtUserBuildHwndList( HDESK desktop, ULONG unk2, ULONG unk3, ULONG unk4,
                                      ULONG thread_id, ULONG count, HWND *buffer, ULONG *size );
-DWORD   WINAPI NtUserCallHwnd( HWND hwnd, DWORD code );
-DWORD   WINAPI NtUserCallHwndParam( HWND hwnd, DWORD_PTR param, DWORD code );
-LRESULT WINAPI NtUserCallNextHookEx( HHOOK hhook, INT code, WPARAM wparam, LPARAM lparam );
 ULONG_PTR WINAPI NtUserCallNoParam( ULONG code );
 ULONG_PTR WINAPI NtUserCallOneParam( ULONG_PTR arg, ULONG code );
 ULONG_PTR WINAPI NtUserCallTwoParam( ULONG_PTR arg1, ULONG_PTR arg2, ULONG code );

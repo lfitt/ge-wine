@@ -990,10 +990,15 @@ NTSTATUS WINAPI NtGetContextThread( HANDLE handle, CONTEXT *context )
     struct syscall_frame *frame = x86_thread_data()->syscall_frame;
     DWORD needed_flags = context->ContextFlags & ~CONTEXT_i386;
     BOOL self = (handle == GetCurrentThread());
+    BOOL use_cached_debug_regs = FALSE;
     NTSTATUS ret;
 
-    /* debug registers require a server call */
-    if (needed_flags & CONTEXT_DEBUG_REGISTERS) self = FALSE;
+    if (self && needed_flags & CONTEXT_DEBUG_REGISTERS)
+    {
+        /* debug registers require a server call if hw breakpoints are enabled */
+        if (x86_thread_data()->dr7 & 0xff) self = FALSE;
+        else use_cached_debug_regs = TRUE;
+    }
 
     if (!self)
     {
@@ -1101,15 +1106,27 @@ NTSTATUS WINAPI NtGetContextThread( HANDLE handle, CONTEXT *context )
                 xstate->YmmContext = frame->xstate.YmmContext;
             }
         }
-        /* update the cached version of the debug registers */
-        if (needed_flags & CONTEXT_DEBUG_REGISTERS)
+        if (context->ContextFlags & (CONTEXT_DEBUG_REGISTERS & ~CONTEXT_i386))
         {
-            x86_thread_data()->dr0 = context->Dr0;
-            x86_thread_data()->dr1 = context->Dr1;
-            x86_thread_data()->dr2 = context->Dr2;
-            x86_thread_data()->dr3 = context->Dr3;
-            x86_thread_data()->dr6 = context->Dr6;
-            x86_thread_data()->dr7 = context->Dr7;
+            if (use_cached_debug_regs)
+            {
+                context->Dr0 = x86_thread_data()->dr0;
+                context->Dr1 = x86_thread_data()->dr1;
+                context->Dr2 = x86_thread_data()->dr2;
+                context->Dr3 = x86_thread_data()->dr3;
+                context->Dr6 = x86_thread_data()->dr6;
+                context->Dr7 = x86_thread_data()->dr7;
+            }
+            else
+            {
+                /* update the cached version of the debug registers */
+                x86_thread_data()->dr0 = context->Dr0;
+                x86_thread_data()->dr1 = context->Dr1;
+                x86_thread_data()->dr2 = context->Dr2;
+                x86_thread_data()->dr3 = context->Dr3;
+                x86_thread_data()->dr6 = context->Dr6;
+                x86_thread_data()->dr7 = context->Dr7;
+            }
         }
     }
 
@@ -1771,6 +1788,30 @@ static BOOL handle_syscall_trap( ucontext_t *sigcontext )
 
 
 /**********************************************************************
+ *    segv_handler_early
+ *
+ * Handler for SIGSEGV and related errors. Used only during the initialization
+ * of the process to handle virtual faults.
+ */
+static void segv_handler_early( int signal, siginfo_t *siginfo, void *sigcontext )
+{
+    ucontext_t *ucontext = sigcontext;
+
+    switch (TRAP_sig(ucontext))
+    {
+    case TRAP_x86_PAGEFLT:  /* Page fault */
+        if (!virtual_handle_fault( siginfo->si_addr, (ERROR_sig(ucontext) >> 1) & 0x09,
+                NULL))
+            return;
+        /* fall-through */
+    default:
+        WINE_ERR( "Got unexpected trap %d during process initialization\n", TRAP_sig(ucontext) );
+        abort_thread(1);
+        break;
+    }
+}
+
+/**********************************************************************
  *		segv_handler
  *
  * Handler for SIGSEGV and related errors.
@@ -2183,7 +2224,7 @@ NTSTATUS get_thread_ldt_entry( HANDLE handle, void *data, ULONG len, ULONG *ret_
                 if (reply->flags)
                     info->Entry = ldt_make_entry( (void *)reply->base, reply->limit, reply->flags );
                 else
-                    status = STATUS_UNSUCCESSFUL;
+                    status = STATUS_ACCESS_VIOLATION;
             }
         }
         SERVER_END_REQ;
@@ -2205,8 +2246,6 @@ NTSTATUS WINAPI NtSetLdtEntries( ULONG sel1, LDT_ENTRY entry1, ULONG sel2, LDT_E
     sigset_t sigset;
 
     if (sel1 >> 16 || sel2 >> 16) return STATUS_INVALID_LDT_DESCRIPTOR;
-    if (sel1 && (sel1 >> 3) < first_ldt_entry) return STATUS_INVALID_LDT_DESCRIPTOR;
-    if (sel2 && (sel2 >> 3) < first_ldt_entry) return STATUS_INVALID_LDT_DESCRIPTOR;
 
     server_enter_uninterrupted_section( &ldt_mutex, &sigset );
     if (sel1) ldt_set_entry( sel1, entry1 );
@@ -2356,6 +2395,34 @@ void signal_init_process(void)
     exit(1);
 }
 
+/**********************************************************************
+ *    signal_init_early
+ */
+void signal_init_early(void)
+{
+    struct sigaction sig_act;
+
+    sig_act.sa_mask = server_block_set;
+    sig_act.sa_flags = SA_SIGINFO | SA_RESTART;
+#ifdef SA_ONSTACK
+    sig_act.sa_flags |= SA_ONSTACK;
+#endif
+#ifdef __ANDROID__
+    sig_act.sa_flags |= SA_RESTORER;
+    sig_act.sa_restorer = rt_sigreturn;
+#endif
+    sig_act.sa_sigaction = segv_handler_early;
+    if (sigaction( SIGSEGV, &sig_act, NULL ) == -1) goto error;
+    if (sigaction( SIGILL, &sig_act, NULL ) == -1) goto error;
+#ifdef SIGBUS
+    if (sigaction( SIGBUS, &sig_act, NULL ) == -1) goto error;
+#endif
+    return;
+
+error:
+    perror("sigaction");
+    exit(1);
+}
 
 /***********************************************************************
  *           call_init_thunk
@@ -2383,7 +2450,19 @@ void DECLSPEC_HIDDEN call_init_thunk( LPTHREAD_START_ROUTINE entry, void *arg, B
     ((XSAVE_FORMAT *)context.ExtendedRegisters)->MxCsr = 0x1f80;
     if ((ctx = get_cpu_area( IMAGE_FILE_MACHINE_I386 ))) *ctx = context;
 
-    if (suspend) wait_suspend( &context );
+    if (suspend)
+    {
+        wait_suspend( &context );
+        if (context.ContextFlags & CONTEXT_DEBUG_REGISTERS & ~CONTEXT_i386)
+        {
+            x86_thread_data()->dr0 = context.Dr0;
+            x86_thread_data()->dr1 = context.Dr1;
+            x86_thread_data()->dr2 = context.Dr2;
+            x86_thread_data()->dr3 = context.Dr3;
+            x86_thread_data()->dr6 = context.Dr6;
+            x86_thread_data()->dr7 = context.Dr7;
+        }
+    }
 
     ctx = (CONTEXT *)((ULONG_PTR)context.Esp & ~3) - 1;
     *ctx = context;

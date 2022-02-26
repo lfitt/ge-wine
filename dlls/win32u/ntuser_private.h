@@ -33,7 +33,6 @@ struct user_callbacks
     BOOL (WINAPI *pRedrawWindow)( HWND, const RECT*, HRGN, UINT );
     LRESULT (WINAPI *pSendMessageTimeoutW)( HWND, UINT, WPARAM, LPARAM, UINT, UINT, PDWORD_PTR );
     HWND (WINAPI *pWindowFromDC)( HDC );
-    LRESULT (WINAPI *send_ll_message)( DWORD, DWORD, UINT, WPARAM, LPARAM, UINT, UINT, PDWORD_PTR );
 };
 
 struct user_object
@@ -129,17 +128,8 @@ struct user_key_state_info
     BYTE  state[256];    /* State for each key */
 };
 
-struct hook_extra_info
-{
-    HHOOK handle;
-    LPARAM lparam;
-};
-
 /* cursoricon.c */
 HICON alloc_cursoricon_handle( BOOL is_icon ) DECLSPEC_HIDDEN;
-
-/* message.c */
-LRESULT handle_internal_message( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam ) DECLSPEC_HIDDEN;
 
 /* window.c */
 HANDLE alloc_user_handle( struct user_object *ptr, unsigned int type ) DECLSPEC_HIDDEN;

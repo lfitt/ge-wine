@@ -28,7 +28,7 @@
 @ stdcall CallMsgFilter(ptr long) CallMsgFilterA
 @ stdcall CallMsgFilterA(ptr long)
 @ stdcall CallMsgFilterW(ptr long)
-@ stdcall CallNextHookEx(long long long long) NtUserCallNextHookEx
+@ stdcall CallNextHookEx(long long long long)
 @ stdcall CallWindowProcA(ptr long long long long)
 @ stdcall CallWindowProcW(ptr long long long long)
 @ stdcall CascadeChildWindows(long long)
@@ -498,7 +498,7 @@
 @ stdcall LoadImageA(long str long long long long)
 @ stdcall LoadImageW(long wstr long long long long)
 @ stdcall LoadKeyboardLayoutA(str long)
-# @ stub LoadKeyboardLayoutEx
+@ stdcall LoadKeyboardLayoutEx(long wstr long)
 @ stdcall LoadKeyboardLayoutW(wstr long)
 @ stdcall LoadLocalFonts()
 @ stdcall LoadMenuA(long str)

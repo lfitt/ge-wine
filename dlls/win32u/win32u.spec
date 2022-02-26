@@ -768,16 +768,16 @@
 @ stub NtUserBuildPropList
 @ stub NtUserCalcMenuBar
 @ stub NtUserCalculatePopupWindowPosition
-@ stdcall NtUserCallHwnd(long long)
+@ stub NtUserCallHwnd
 @ stub NtUserCallHwndLock
 @ stub NtUserCallHwndLockSafe
 @ stub NtUserCallHwndOpt
-@ stdcall NtUserCallHwndParam(long ptr long)
+@ stub NtUserCallHwndParam
 @ stub NtUserCallHwndParamLock
 @ stub NtUserCallHwndParamLockSafe
 @ stub NtUserCallHwndSafe
 @ stub NtUserCallMsgFilter
-@ stdcall NtUserCallNextHookEx(long long long long)
+@ stub NtUserCallNextHookEx
 @ stdcall NtUserCallNoParam(long)
 @ stdcall NtUserCallOneParam(long long)
 @ stdcall NtUserCallTwoParam(long long long)

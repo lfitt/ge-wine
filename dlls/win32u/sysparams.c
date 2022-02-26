@@ -1500,7 +1500,7 @@ RECT get_display_rect( const WCHAR *display )
     return map_dpi_rect( rect, system_dpi, get_thread_dpi() );
 }
 
-static RECT get_primary_monitor_rect( UINT dpi )
+static RECT get_primary_monitor_rect(void)
 {
     struct monitor *monitor;
     RECT rect = {0};
@@ -1515,7 +1515,7 @@ static RECT get_primary_monitor_rect( UINT dpi )
     }
 
     unlock_display_devices();
-    return map_dpi_rect( rect, system_dpi, dpi );
+    return map_dpi_rect( rect, system_dpi, get_thread_dpi() );
 }
 
 /**********************************************************************
@@ -4235,10 +4235,10 @@ int get_system_metrics( int index )
     case SM_MOUSEWHEELPRESENT:
         return 1;
     case SM_CXSCREEN:
-        rect = get_primary_monitor_rect( get_thread_dpi() );
+        rect = get_primary_monitor_rect();
         return rect.right - rect.left;
     case SM_CYSCREEN:
-        rect = get_primary_monitor_rect( get_thread_dpi() );
+        rect = get_primary_monitor_rect();
         return rect.bottom - rect.top;
     case SM_XVIRTUALSCREEN:
         rect = get_virtual_screen_rect( get_thread_dpi() );
@@ -4564,36 +4564,20 @@ ULONG_PTR WINAPI NtUserCallOneParam( ULONG_PTR arg, ULONG code )
         return get_sys_color( arg );
     case NtUserRealizePalette:
         return realize_palette( UlongToHandle(arg) );
-    case NtUserGetPrimaryMonitorRect:
-        *(RECT *)arg = get_primary_monitor_rect( 0 );
-        return 1;
     case NtUserGetSysColorBrush:
         return HandleToUlong( get_sys_color_brush(arg) );
     case NtUserGetSysColorPen:
         return HandleToUlong( get_sys_color_pen(arg) );
     case NtUserGetSystemMetrics:
         return get_system_metrics( arg );
-    case NtUserGetVirtualScreenRect:
-        *(RECT *)arg = get_virtual_screen_rect( 0 );
-        return 1;
     case NtUserMessageBeep:
         return message_beep( arg );
     /* temporary exports */
-    case NtUserCallHooks:
-        {
-            const struct win_hook_params *params = (struct win_hook_params *)arg;
-            call_hooks( params->id, params->code, params->wparam, params->lparam, params->next_unicode );
-        }
     case NtUserFlushWindowSurfaces:
         flush_window_surfaces( arg );
         return 0;
     case NtUserGetDeskPattern:
         return get_entry( &entry_DESKPATTERN, 256, (WCHAR *)arg );
-    case NtUserHandleInternalMessage:
-        {
-            MSG *msg = (MSG *)arg;
-            return handle_internal_message( msg->hwnd, msg->message, msg->wParam, msg->lParam );
-        }
     case NtUserIncrementKeyStateCounter:
         return InterlockedAdd( &global_key_state_counter, arg );
     case NtUserLock:

@@ -1,0 +1,40 @@
+--- include/msxml6.idl
++++ include/msxml6.idl
+@@ -3048,18 +3048,6 @@ coclass DOMDocument60
+     [default, source] dispinterface XMLDOMDocumentEvents;
+ }
+ 
+-[
+-    helpstring("Free threaded XML DOM Document 6.0"),
+-    progid("Msxml2.FreeThreadedDOMDocument.6.0"),
+-    threading(both),
+-    uuid(88d96a06-f192-11d4-a65f-0040963251e5),
+-]
+-coclass FreeThreadedDOMDocument60
+-{
+-    [default] interface IXMLDOMDocument3;
+-    [default, source] dispinterface XMLDOMDocumentEvents;
+-}
+-
+ [
+     helpstring("SAX XML Reader 6.0"),
+     progid("Msxml2.SAXXMLReader.6.0"),
+@@ -3165,6 +3153,18 @@ coclass XSLTemplate60
+     [default] interface IXSLTemplate;
+ }
+ 
++[
++    helpstring("Free threaded XML DOM Document 6.0"),
++    progid("Msxml2.FreeThreadedDOMDocument.6.0"),
++    threading(both),
++    uuid(88d96a06-f192-11d4-a65f-0040963251e5),
++]
++coclass FreeThreadedDOMDocument60
++{
++    [default] interface IXMLDOMDocument3;
++    [default, source] dispinterface XMLDOMDocumentEvents;
++}
++
+ [
+     helpstring("XML HTTP 6.0"),
+     progid("Msxml2.XMLHTTP.6.0"),

@@ -1,0 +1,31 @@
+--- dlls/msxml3/factory.c
++++ dlls/msxml3/factory.c
+@@ -31,6 +31,7 @@
+ #include "ole2.h"
+ #include "msxml.h"
+ #include "msxml2.h"
++#include "msxml6.h"
+ #include "xmlparser.h"
+ 
+ /* undef the #define in msxml2 so that we can access the v.2 version
+--- dlls/msxml3/factory.c
++++ dlls/msxml3/factory.c
+@@ -277,6 +277,7 @@ static HRESULT DOMClassFactory_Create(const GUID *clsid, REFIID riid, void **ppv
+ 
+ static ClassFactory xmldoccf = { { &ClassFactoryVtbl }, XMLDocument_create };
+ static ClassFactory httpreqcf = { { &ClassFactoryVtbl }, XMLHTTPRequest_create };
++static ClassFactory httpreqcf2 = { { &ClassFactoryVtbl }, XMLHTTPRequest2_create };
+ static ClassFactory serverhttp = { { &ClassFactoryVtbl }, ServerXMLHTTP_create };
+ static ClassFactory xsltemplatecf = { { &ClassFactoryVtbl }, XSLTemplate_create };
+ static ClassFactory mxnsmanagercf = { {&ClassFactoryVtbl }, MXNamespaceManager_create };
+@@ -338,6 +339,10 @@ HRESULT WINAPI DllGetClassObject( REFCLSID rclsid, REFIID riid, void **ppv )
+     {
+         cf = &httpreqcf.IClassFactory_iface;
+     }
++    else if( IsEqualCLSID( rclsid, &CLSID_FreeThreadedXMLHTTP60 ))
++    {
++        cf = &httpreqcf2.IClassFactory_iface;
++    }
+     else if( IsEqualCLSID( rclsid, &CLSID_ServerXMLHTTP ) ||
+              IsEqualCLSID( rclsid, &CLSID_ServerXMLHTTP30 ) ||
+              IsEqualCLSID( rclsid, &CLSID_ServerXMLHTTP40 ) ||

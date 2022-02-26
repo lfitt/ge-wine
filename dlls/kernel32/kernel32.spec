@@ -616,7 +616,7 @@
 @ stdcall -import GetConsoleProcessList(ptr long)
 @ stdcall -import GetConsoleScreenBufferInfo(long ptr)
 @ stdcall -import GetConsoleScreenBufferInfoEx(long ptr)
-# @ stub GetConsoleSelectionInfo
+@ stdcall -import GetConsoleSelectionInfo(ptr)
 @ stdcall -import GetConsoleTitleA(ptr long)
 @ stdcall -import GetConsoleTitleW(ptr long)
 @ stdcall -import GetConsoleWindow()
@@ -766,8 +766,10 @@
 @ stdcall -import GetOverlappedResultEx(long ptr ptr long long)
 @ stdcall -import GetUserDefaultGeoName(ptr long)
 @ stdcall -import GetUserPreferredUILanguages(long ptr ptr ptr)
+@ stdcall -import GetPackagesByPackageFamily(wstr ptr ptr ptr ptr)
 @ stdcall GetPackageFamilyName(long ptr ptr) kernelbase.GetPackageFamilyName
 @ stdcall GetPackageFullName(long ptr ptr) kernelbase.GetPackageFullName
+@ stdcall -import GetPackagePath(ptr long ptr ptr)
 @ stdcall -import GetPhysicallyInstalledSystemMemory(ptr)
 @ stdcall -import GetPriorityClass(long)
 @ stdcall GetPrivateProfileIntA(str str long str)
@@ -1153,6 +1155,7 @@
 @ stdcall -import PeekConsoleInputW(ptr ptr long ptr)
 @ stdcall -import PeekNamedPipe(long ptr long ptr ptr ptr)
 @ stdcall -import PostQueuedCompletionStatus(long long ptr ptr)
+@ stdcall -import PackageFullNameFromId(ptr ptr ptr)
 @ stdcall -import PackageIdFromFullName(wstr long ptr ptr)
 @ stdcall PowerClearRequest(long long)
 @ stdcall PowerCreateRequest(ptr)

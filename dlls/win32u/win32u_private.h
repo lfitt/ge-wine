@@ -183,9 +183,6 @@ struct unix_funcs
     BOOL     (WINAPI *pNtGdiUpdateColors)( HDC hdc );
     BOOL     (WINAPI *pNtGdiWidenPath)( HDC hdc );
     HKL      (WINAPI *pNtUserActivateKeyboardLayout)( HKL layout, UINT flags );
-    DWORD    (WINAPI *pNtUserCallHwnd)( HWND hwnd, DWORD code );
-    DWORD    (WINAPI *pNtUserCallHwndParam)( HWND hwnd, DWORD_PTR param, DWORD code );
-    LRESULT  (WINAPI *pNtUserCallNextHookEx)( HHOOK hhook, INT code, WPARAM wparam, LPARAM lparam );
     ULONG_PTR (WINAPI *pNtUserCallNoParam)( ULONG code );
     ULONG_PTR (WINAPI *pNtUserCallOneParam)( ULONG_PTR arg, ULONG code );
     ULONG_PTR (WINAPI *pNtUserCallTwoParam)( ULONG_PTR arg1, ULONG_PTR arg2, ULONG code );
@@ -256,8 +253,6 @@ extern ULONG_PTR get_icon_param( HICON handle ) DECLSPEC_HIDDEN;
 extern ULONG_PTR set_icon_param( HICON handle, ULONG_PTR param ) DECLSPEC_HIDDEN;
 
 /* hook.c */
-extern LRESULT call_current_hook( HHOOK hhook, INT code, WPARAM wparam, LPARAM lparam ) DECLSPEC_HIDDEN;
-extern LRESULT call_hooks( INT id, INT code, WPARAM wparam, LPARAM lparam, BOOL unicode ) DECLSPEC_HIDDEN;
 extern BOOL unhook_windows_hook( INT id, HOOKPROC proc ) DECLSPEC_HIDDEN;
 
 /* input.c */

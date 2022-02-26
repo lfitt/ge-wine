@@ -470,6 +470,7 @@
 @ stdcall GetConsoleProcessList(ptr long)
 @ stdcall GetConsoleScreenBufferInfo(long ptr)
 @ stdcall GetConsoleScreenBufferInfoEx(long ptr)
+@ stdcall GetConsoleSelectionInfo(ptr)
 @ stdcall GetConsoleTitleA(ptr long)
 @ stdcall GetConsoleTitleW(ptr long)
 @ stdcall GetConsoleWindow()
@@ -627,7 +628,7 @@
 # @ stub GetPackageInfo
 # @ stub GetPackageInstallTime
 # @ stub GetPackageOSMaxVersionTested
-# @ stub GetPackagePath
+@ stdcall GetPackagePath(ptr long ptr ptr)
 # @ stub GetPackagePathByFullName
 # @ stub GetPackagePathOnVolume
 # @ stub GetPackageProperty
@@ -640,7 +641,7 @@
 # @ stub GetPackageStatusForUser
 # @ stub GetPackageTargetPlatformProperty
 # @ stub GetPackageVolumeSisPath
-# @ stub GetPackagesByPackageFamily
+@ stdcall GetPackagesByPackageFamily(wstr ptr ptr ptr ptr)
 @ stdcall GetPerformanceInfo(ptr long)
 @ stdcall GetPhysicallyInstalledSystemMemory(ptr)
 # @ stub GetPreviousFgPolicyRefreshInfoInternal
@@ -1039,7 +1040,7 @@
 # @ stub PackageFamilyNameFromFullName
 # @ stub PackageFamilyNameFromId
 # @ stub PackageFamilyNameFromProductId
-# @ stub PackageFullNameFromId
+@ stdcall PackageFullNameFromId(ptr ptr ptr)
 # @ stub PackageFullNameFromProductId
 @ stdcall PackageIdFromFullName(wstr long ptr ptr)
 # @ stub PackageIdFromProductId

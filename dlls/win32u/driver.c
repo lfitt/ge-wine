@@ -923,9 +923,15 @@ static BOOL CDECL nulldrv_SystemParametersInfo( UINT action, UINT int_param, voi
     return FALSE;
 }
 
+
 static const struct vulkan_funcs * CDECL nulldrv_wine_get_vulkan_driver( UINT version )
 {
     return NULL;
+}
+
+static void CDECL nulldrv_UpdateCandidatePos( HWND hwnd, const RECT *caret_rect )
+{
+
 }
 
 static void CDECL nulldrv_ThreadDetach( void )
@@ -1065,7 +1071,6 @@ static const struct user_driver_funcs lazy_load_driver =
     /* windowing functions */
     .pMsgWaitForMultipleObjectsEx = nulldrv_MsgWaitForMultipleObjectsEx,
     .pScrollDC = nulldrv_ScrollDC,
-    .pWindowMessage = nulldrv_WindowMessage,
     /* system parameters */
     .pSystemParametersInfo = nulldrv_SystemParametersInfo,
     /* vulkan support */
@@ -1133,6 +1138,7 @@ void CDECL __wine_set_display_driver( struct user_driver_funcs *driver, UINT ver
     SET_USER_FUNC(WindowPosChanged);
     SET_USER_FUNC(SystemParametersInfo);
     SET_USER_FUNC(wine_get_vulkan_driver);
+    SET_USER_FUNC(UpdateCandidatePos);
     SET_USER_FUNC(ThreadDetach);
 #undef SET_USER_FUNC
 
@@ -1382,13 +1388,19 @@ NTSTATUS WINAPI NtGdiDdDDICheckVidPnExclusiveOwnership( const D3DKMT_CHECKVIDPNE
 struct opengl_funcs * CDECL __wine_get_wgl_driver( HDC hdc, UINT version )
 {
     struct opengl_funcs *ret = NULL;
-    DC * dc = get_dc_ptr( hdc );
+    DC * dc = get_dc_obj( hdc );
+    PHYSDEV physdev;
 
-    if (dc)
+    if (!dc) return NULL;
+
+    if (dc->attr->disabled)
     {
-        PHYSDEV physdev = GET_DC_PHYSDEV( dc, wine_get_wgl_driver );
-        ret = physdev->funcs->wine_get_wgl_driver( physdev, version );
-        release_dc_ptr( dc );
+        GDI_ReleaseObj( hdc );
+        return NULL;
     }
+
+    physdev = GET_DC_PHYSDEV( dc, wine_get_wgl_driver );
+    ret = physdev->funcs->wine_get_wgl_driver( physdev, version );
+    GDI_ReleaseObj( hdc );
     return ret;
 }

@@ -1,7 +1,5 @@
 MODULE = light.msstyles
 
-EXTRADLLFLAGS = -Wb,--data-only
-
 RC_SRCS = light.rc
 
 SVG_SRCS = \

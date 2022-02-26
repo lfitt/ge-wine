@@ -356,6 +356,7 @@ static HRESULT pulse_connect(const char *name)
         pa_context_unref(pulse_ctx);
 
     pulse_ctx = pa_context_new(pa_mainloop_get_api(pulse_ml), name);
+    setenv("PULSE_PROP_application.name", name, 1);
     if (!pulse_ctx) {
         ERR("Failed to create context\n");
         return E_FAIL;
@@ -587,7 +588,7 @@ static void convert_channel_map(const pa_channel_map *pa_map, WAVEFORMATEXTENSIB
     fmt->dwChannelMask = pa_mask;
 }
 
-static void pulse_probe_settings(int render, WAVEFORMATEXTENSIBLE *fmt) {
+static void pulse_probe_settings(pa_mainloop *ml, pa_context *ctx, int render, WAVEFORMATEXTENSIBLE *fmt) {
     WAVEFORMATEX *wfx = &fmt->Format;
     pa_stream *stream;
     pa_channel_map map;
@@ -606,7 +607,7 @@ static void pulse_probe_settings(int render, WAVEFORMATEXTENSIBLE *fmt) {
     attr.minreq = attr.fragsize = pa_frame_size(&ss);
     attr.prebuf = 0;
 
-    stream = pa_stream_new(pulse_ctx, "format test stream", &ss, &map);
+    stream = pa_stream_new(ctx, "format test stream", &ss, &map);
     if (stream)
         pa_stream_set_state_callback(stream, pulse_stream_state, NULL);
     if (!stream)
@@ -617,7 +618,7 @@ static void pulse_probe_settings(int render, WAVEFORMATEXTENSIBLE *fmt) {
     else
         ret = pa_stream_connect_record(stream, NULL, &attr, PA_STREAM_START_CORKED|PA_STREAM_FIX_RATE|PA_STREAM_FIX_CHANNELS|PA_STREAM_EARLY_REQUESTS);
     if (ret >= 0) {
-        while (pa_mainloop_iterate(pulse_ml, 1, &ret) >= 0 &&
+        while (pa_mainloop_iterate(ml, 1, &ret) >= 0 &&
                 pa_stream_get_state(stream) == PA_STREAM_CREATING)
         {}
         if (pa_stream_get_state(stream) == PA_STREAM_READY) {
@@ -628,7 +629,7 @@ static void pulse_probe_settings(int render, WAVEFORMATEXTENSIBLE *fmt) {
             else
                 length = pa_stream_get_buffer_attr(stream)->fragsize;
             pa_stream_disconnect(stream);
-            while (pa_mainloop_iterate(pulse_ml, 1, &ret) >= 0 &&
+            while (pa_mainloop_iterate(ml, 1, &ret) >= 0 &&
                     pa_stream_get_state(stream) == PA_STREAM_READY)
             {}
         }
@@ -675,31 +676,32 @@ static NTSTATUS pulse_test_connect(void *args)
     struct pulse_config *config = params->config;
     pa_operation *o;
     int ret;
+    pa_mainloop *ml;
+    pa_context *ctx;
 
     pulse_lock();
-    pulse_ml = pa_mainloop_new();
+    ml = pa_mainloop_new();
 
-    pa_mainloop_set_poll_func(pulse_ml, pulse_poll_func, NULL);
+    pa_mainloop_set_poll_func(ml, pulse_poll_func, NULL);
 
-    pulse_ctx = pa_context_new(pa_mainloop_get_api(pulse_ml), params->name);
-    if (!pulse_ctx) {
+    ctx = pa_context_new(pa_mainloop_get_api(ml), params->name);
+    if (!ctx) {
         ERR("Failed to create context\n");
-        pa_mainloop_free(pulse_ml);
-        pulse_ml = NULL;
+        pa_mainloop_free(ml);
         pulse_unlock();
         params->result = E_FAIL;
         return STATUS_SUCCESS;
     }
 
-    pa_context_set_state_callback(pulse_ctx, pulse_contextcallback, NULL);
+    pa_context_set_state_callback(ctx, pulse_contextcallback, NULL);
 
-    TRACE("libpulse protocol version: %u. API Version %u\n", pa_context_get_protocol_version(pulse_ctx), PA_API_VERSION);
-    if (pa_context_connect(pulse_ctx, NULL, 0, NULL) < 0)
+    TRACE("libpulse protocol version: %u. API Version %u\n", pa_context_get_protocol_version(ctx), PA_API_VERSION);
+    if (pa_context_connect(ctx, NULL, 0, NULL) < 0)
         goto fail;
 
     /* Wait for connection */
-    while (pa_mainloop_iterate(pulse_ml, 1, &ret) >= 0) {
-        pa_context_state_t state = pa_context_get_state(pulse_ctx);
+    while (pa_mainloop_iterate(ml, 1, &ret) >= 0) {
+        pa_context_state_t state = pa_context_get_state(ctx);
 
         if (state == PA_CONTEXT_FAILED || state == PA_CONTEXT_TERMINATED)
             goto fail;
@@ -708,15 +710,15 @@ static NTSTATUS pulse_test_connect(void *args)
             break;
     }
 
-    if (pa_context_get_state(pulse_ctx) != PA_CONTEXT_READY)
+    if (pa_context_get_state(ctx) != PA_CONTEXT_READY)
         goto fail;
 
     TRACE("Test-connected to server %s with protocol version: %i.\n",
-        pa_context_get_server(pulse_ctx),
+        pa_context_get_server(ctx),
         pa_context_get_server_protocol_version(pulse_ctx));
 
-    pulse_probe_settings(1, &pulse_fmt[0]);
-    pulse_probe_settings(0, &pulse_fmt[1]);
+    pulse_probe_settings(ml, ctx, 1, &pulse_fmt[0]);
+    pulse_probe_settings(ml, ctx, 0, &pulse_fmt[1]);
 
     free_phys_device_lists();
     list_init(&g_phys_speakers);
@@ -725,26 +727,24 @@ static NTSTATUS pulse_test_connect(void *args)
     pulse_add_device(&g_phys_speakers, NULL, 0, Speakers, 0, "", "PulseAudio");
     pulse_add_device(&g_phys_sources, NULL, 0, Microphone, 0, "", "PulseAudio");
 
-    o = pa_context_get_sink_info_list(pulse_ctx, &pulse_phys_speakers_cb, NULL);
+    o = pa_context_get_sink_info_list(ctx, &pulse_phys_speakers_cb, NULL);
     if (o) {
-        while (pa_mainloop_iterate(pulse_ml, 1, &ret) >= 0 &&
+        while (pa_mainloop_iterate(ml, 1, &ret) >= 0 &&
                 pa_operation_get_state(o) == PA_OPERATION_RUNNING)
         {}
         pa_operation_unref(o);
     }
 
-    o = pa_context_get_source_info_list(pulse_ctx, &pulse_phys_sources_cb, NULL);
+    o = pa_context_get_source_info_list(ctx, &pulse_phys_sources_cb, NULL);
     if (o) {
-        while (pa_mainloop_iterate(pulse_ml, 1, &ret) >= 0 &&
+        while (pa_mainloop_iterate(ml, 1, &ret) >= 0 &&
                 pa_operation_get_state(o) == PA_OPERATION_RUNNING)
         {}
         pa_operation_unref(o);
     }
 
-    pa_context_unref(pulse_ctx);
-    pulse_ctx = NULL;
-    pa_mainloop_free(pulse_ml);
-    pulse_ml = NULL;
+    pa_context_unref(ctx);
+    pa_mainloop_free(ml);
 
     config->modes[0].format = pulse_fmt[0];
     config->modes[0].def_period = pulse_def_period[0];
@@ -759,10 +759,8 @@ static NTSTATUS pulse_test_connect(void *args)
     return STATUS_SUCCESS;
 
 fail:
-    pa_context_unref(pulse_ctx);
-    pulse_ctx = NULL;
-    pa_mainloop_free(pulse_ml);
-    pulse_ml = NULL;
+    pa_context_unref(ctx);
+    pa_mainloop_free(ml);
     pulse_unlock();
     params->result = E_FAIL;
     return STATUS_SUCCESS;
@@ -925,7 +923,7 @@ static HRESULT pulse_spec_from_waveformat(struct pulse_stream *stream, const WAV
 
 static HRESULT pulse_stream_connect(struct pulse_stream *stream, const char *pulse_name, UINT32 period_bytes)
 {
-    pa_stream_flags_t flags = PA_STREAM_START_CORKED | PA_STREAM_START_UNMUTED | PA_STREAM_ADJUST_LATENCY;
+    pa_stream_flags_t flags = PA_STREAM_START_CORKED | PA_STREAM_START_UNMUTED | PA_STREAM_ADJUST_LATENCY | PA_STREAM_VARIABLE_RATE;
     int ret;
     char buffer[64];
     static LONG number;
@@ -2108,6 +2106,41 @@ static NTSTATUS pulse_set_event_handle(void *args)
     return STATUS_SUCCESS;
 }
 
+static NTSTATUS pulse_set_sample_rate(void *args)
+{
+    struct set_sample_rate_params *params = args;
+    struct pulse_stream *stream = params->stream;
+    HRESULT hr = S_OK;
+    pa_operation *o;
+    int success;
+
+    pulse_lock();
+    if (!pulse_stream_valid(stream))
+        hr = AUDCLNT_E_DEVICE_INVALIDATED;
+    else
+    {
+        if (!(o = pa_stream_update_sample_rate(stream->stream, params->new_rate, pulse_op_cb, &success)))
+            success = 0;
+        else
+        {
+            while (pa_operation_get_state(o) == PA_OPERATION_RUNNING)
+                pthread_cond_wait(&pulse_cond, &pulse_mutex);
+            pa_operation_unref(o);
+        }
+
+        if (!success) hr = E_FAIL;
+        else
+        {
+            stream->ss.rate = params->new_rate;
+            stream->period_bytes = pa_frame_size(&stream->ss) * muldiv(stream->mmdev_period_usec, stream->ss.rate, 1000000);
+        }
+    }
+    pulse_unlock();
+
+    params->result = hr;
+    return STATUS_SUCCESS;
+}
+
 static NTSTATUS pulse_is_started(void *args)
 {
     struct is_started_params *params = args;
@@ -2220,6 +2253,7 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
     pulse_get_position,
     pulse_set_volumes,
     pulse_set_event_handle,
+    pulse_set_sample_rate,
     pulse_test_connect,
     pulse_is_started,
     pulse_get_prop_value,

@@ -1,0 +1,10 @@
+--- dlls/user32/user_private.h
++++ dlls/user32/user_private.h
+@@ -152,6 +152,7 @@ static inline BOOL is_broadcast( HWND hwnd )
+ }
+ 
+ extern HMODULE user32_module DECLSPEC_HIDDEN;
++extern BOOL enable_mouse_in_pointer DECLSPEC_HIDDEN;
+ 
+ struct dce;
+ struct tagWND;

@@ -74,7 +74,6 @@ struct parser_source
     SourceSeeking seek;
 
     CRITICAL_SECTION flushing_cs;
-    CONDITION_VARIABLE eos_cv;
     HANDLE thread;
 
     /* This variable is read and written by both the streaming thread and
@@ -82,8 +81,6 @@ struct parser_source
      * thread when the streaming thread is not running, or when it is blocked
      * by flushing_cs. */
     bool need_segment;
-
-    bool eos;
 };
 
 static inline struct parser *impl_from_strmbase_filter(struct strmbase_filter *iface)
@@ -109,6 +106,7 @@ static bool amt_from_wg_format_audio(AM_MEDIA_TYPE *mt, const struct wg_format *
     switch (format->u.audio.format)
     {
     case WG_AUDIO_FORMAT_UNKNOWN:
+    case WG_AUDIO_FORMAT_AAC:
         return false;
 
     case WG_AUDIO_FORMAT_MPEG1_LAYER1:
@@ -280,6 +278,7 @@ unsigned int wg_format_get_max_size(const struct wg_format *format)
                      * but as long as every sample fits into our allocator, we're fine. */
                     return width * height * 3;
 
+                case WG_VIDEO_FORMAT_H264:
                 case WG_VIDEO_FORMAT_UNKNOWN:
                     FIXME("Cannot guess maximum sample size for unknown video format.\n");
                     return 0;
@@ -321,16 +320,13 @@ unsigned int wg_format_get_max_size(const struct wg_format *format)
                 case WG_AUDIO_FORMAT_MPEG1_LAYER3:
                     return 40000;
 
+                case WG_AUDIO_FORMAT_AAC:
                 case WG_AUDIO_FORMAT_UNKNOWN:
                     FIXME("Cannot guess maximum sample size for unknown audio format.\n");
                     return 0;
             }
             break;
         }
-
-        case WG_MAJOR_TYPE_WMA:
-            FIXME("WMA format not implemented!\n");
-            return 0;
 
         case WG_MAJOR_TYPE_UNKNOWN:
             FIXME("Cannot guess maximum sample size for unknown format.\n");
@@ -424,10 +420,6 @@ bool amt_from_wg_format(AM_MEDIA_TYPE *mt, const struct wg_format *format, bool 
     switch (format->major_type)
     {
     case WG_MAJOR_TYPE_UNKNOWN:
-        return false;
-
-    case WG_MAJOR_TYPE_WMA:
-        FIXME("WMA format not implemented!\n");
         return false;
 
     case WG_MAJOR_TYPE_AUDIO:
@@ -686,7 +678,7 @@ static uint64_t scale_uint64(uint64_t value, uint32_t numerator, uint32_t denomi
 
 /* Fill and send a single IMediaSample. */
 static HRESULT send_sample(struct parser_source *pin, IMediaSample *sample,
-        const struct wg_parser_buffer *buffer, uint32_t offset, uint32_t size, DWORD bytes_per_second)
+        const struct wg_parser_event *event, uint32_t offset, uint32_t size, DWORD bytes_per_second)
 {
     HRESULT hr;
     BYTE *ptr = NULL;
@@ -707,21 +699,21 @@ static HRESULT send_sample(struct parser_source *pin, IMediaSample *sample,
         return S_OK;
     }
 
-    if (buffer->has_pts)
+    if (event->u.buffer.has_pts)
     {
-        REFERENCE_TIME start_pts = buffer->pts;
+        REFERENCE_TIME start_pts = event->u.buffer.pts;
 
         if (offset)
             start_pts += scale_uint64(offset, 10000000, bytes_per_second);
         start_pts -= pin->seek.llCurrent;
         start_pts *= pin->seek.dRate;
 
-        if (buffer->has_duration)
+        if (event->u.buffer.has_duration)
         {
-            REFERENCE_TIME end_pts = buffer->pts + buffer->duration;
+            REFERENCE_TIME end_pts = event->u.buffer.pts + event->u.buffer.duration;
 
-            if (offset + size < buffer->size)
-                end_pts = buffer->pts + scale_uint64(offset + size, 10000000, bytes_per_second);
+            if (offset + size < event->u.buffer.size)
+                end_pts = event->u.buffer.pts + scale_uint64(offset + size, 10000000, bytes_per_second);
             end_pts -= pin->seek.llCurrent;
             end_pts *= pin->seek.dRate;
 
@@ -740,9 +732,9 @@ static HRESULT send_sample(struct parser_source *pin, IMediaSample *sample,
         IMediaSample_SetMediaTime(sample, NULL, NULL);
     }
 
-    IMediaSample_SetDiscontinuity(sample, !offset && buffer->discontinuity);
-    IMediaSample_SetPreroll(sample, buffer->preroll);
-    IMediaSample_SetSyncPoint(sample, !buffer->delta);
+    IMediaSample_SetDiscontinuity(sample, !offset && event->u.buffer.discontinuity);
+    IMediaSample_SetPreroll(sample, event->u.buffer.preroll);
+    IMediaSample_SetSyncPoint(sample, !event->u.buffer.delta);
 
     if (!pin->pin.pin.peer)
         return VFW_E_NOT_CONNECTED;
@@ -754,7 +746,7 @@ static HRESULT send_sample(struct parser_source *pin, IMediaSample *sample,
 
 /* Send a single GStreamer buffer (splitting it into multiple IMediaSamples if
  * necessary). */
-static void send_buffer(struct parser_source *pin, const struct wg_parser_buffer *buffer)
+static void send_buffer(struct parser_source *pin, const struct wg_parser_event *event)
 {
     HRESULT hr;
     IMediaSample *sample;
@@ -774,7 +766,7 @@ static void send_buffer(struct parser_source *pin, const struct wg_parser_buffer
         WAVEFORMATEX *format = (WAVEFORMATEX *)pin->pin.pin.mt.pbFormat;
         uint32_t offset = 0;
 
-        while (offset < buffer->size)
+        while (offset < event->u.buffer.size)
         {
             uint32_t advance;
 
@@ -784,9 +776,9 @@ static void send_buffer(struct parser_source *pin, const struct wg_parser_buffer
                 break;
             }
 
-            advance = min(IMediaSample_GetSize(sample), buffer->size - offset);
+            advance = min(IMediaSample_GetSize(sample), event->u.buffer.size - offset);
 
-            hr = send_sample(pin, sample, buffer, offset, advance, format->nAvgBytesPerSec);
+            hr = send_sample(pin, sample, event, offset, advance, format->nAvgBytesPerSec);
 
             IMediaSample_Release(sample);
 
@@ -804,7 +796,7 @@ static void send_buffer(struct parser_source *pin, const struct wg_parser_buffer
         }
         else
         {
-            hr = send_sample(pin, sample, buffer, 0, buffer->size, 0);
+            hr = send_sample(pin, sample, event, 0, event->u.buffer.size, 0);
 
             IMediaSample_Release(sample);
         }
@@ -822,26 +814,30 @@ static DWORD CALLBACK stream_thread(void *arg)
 
     while (filter->streaming)
     {
-        struct wg_parser_buffer buffer;
+        struct wg_parser_event event;
 
         EnterCriticalSection(&pin->flushing_cs);
 
-        if (pin->eos)
+        if (!wg_parser_stream_get_event(pin->wg_stream, &event))
         {
-            SleepConditionVariableCS(&pin->eos_cv, &pin->flushing_cs, INFINITE);
             LeaveCriticalSection(&pin->flushing_cs);
             continue;
         }
 
-        if (wg_parser_stream_get_buffer(pin->wg_stream, &buffer))
+        TRACE("Got event of type %#x.\n", event.type);
+
+        switch (event.type)
         {
-            send_buffer(pin, &buffer);
-        }
-        else
-        {
-            TRACE("Got EOS.\n");
-            IPin_EndOfStream(pin->pin.pin.peer);
-            pin->eos = true;
+            case WG_PARSER_EVENT_BUFFER:
+                send_buffer(pin, &event);
+                break;
+
+            case WG_PARSER_EVENT_EOS:
+                IPin_EndOfStream(pin->pin.pin.peer);
+                break;
+
+            case WG_PARSER_EVENT_NONE:
+                assert(0);
         }
 
         LeaveCriticalSection(&pin->flushing_cs);
@@ -889,7 +885,7 @@ static DWORD CALLBACK read_thread(void *arg)
         if (FAILED(hr))
             ERR("Failed to read %u bytes at offset %I64u, hr %#lx.\n", size, offset, hr);
 
-        wg_parser_push_data(filter->wg_parser, SUCCEEDED(hr) ? data : NULL, size);
+        wg_parser_push_data(filter->wg_parser, SUCCEEDED(hr) ? WG_READ_SUCCESS : WG_READ_FAILURE, data, size);
     }
 
     free(data);
@@ -959,6 +955,7 @@ static HRESULT parser_init_stream(struct strmbase_filter *iface)
         return S_OK;
 
     filter->streaming = true;
+    wg_parser_end_flush(filter->wg_parser);
 
     /* DirectShow retains the old seek positions, but resets to them every time
      * it transitions from stopped -> paused. */
@@ -971,19 +968,17 @@ static HRESULT parser_init_stream(struct strmbase_filter *iface)
 
     for (i = 0; i < filter->source_count; ++i)
     {
-        struct parser_source *pin = filter->sources[i];
         HRESULT hr;
 
-        if (!pin->pin.pin.peer)
+        if (!filter->sources[i]->pin.pin.peer)
             continue;
 
-        if (FAILED(hr = IMemAllocator_Commit(pin->pin.pAllocator)))
+        if (FAILED(hr = IMemAllocator_Commit(filter->sources[i]->pin.pAllocator)))
             ERR("Failed to commit allocator, hr %#lx.\n", hr);
 
-        pin->need_segment = true;
-        pin->eos = false;
+        filter->sources[i]->need_segment = true;
 
-        pin->thread = CreateThread(NULL, 0, stream_thread, pin, 0, NULL);
+        filter->sources[i]->thread = CreateThread(NULL, 0, stream_thread, filter->sources[i], 0, NULL);
     }
 
     return S_OK;
@@ -998,6 +993,7 @@ static HRESULT parser_cleanup_stream(struct strmbase_filter *iface)
         return S_OK;
 
     filter->streaming = false;
+    wg_parser_begin_flush(filter->wg_parser);
 
     for (i = 0; i < filter->source_count; ++i)
     {
@@ -1008,7 +1004,6 @@ static HRESULT parser_cleanup_stream(struct strmbase_filter *iface)
 
         IMemAllocator_Decommit(pin->pin.pAllocator);
 
-        WakeConditionVariable(&pin->eos_cv);
         WaitForSingleObject(pin->thread, INFINITE);
         CloseHandle(pin->thread);
         pin->thread = NULL;
@@ -1322,6 +1317,8 @@ static HRESULT WINAPI GST_Seeking_SetPositions(IMediaSeeking *iface,
 
     if (!(current_flags & AM_SEEKING_NoFlush))
     {
+        wg_parser_begin_flush(filter->wg_parser);
+
         for (i = 0; i < filter->source_count; ++i)
         {
             if (filter->sources[i]->pin.pin.peer)
@@ -1349,6 +1346,8 @@ static HRESULT WINAPI GST_Seeking_SetPositions(IMediaSeeking *iface,
 
     if (!(current_flags & AM_SEEKING_NoFlush))
     {
+        wg_parser_end_flush(filter->wg_parser);
+
         for (i = 0; i < filter->source_count; ++i)
         {
             struct parser_source *flush_pin = filter->sources[i];
@@ -1367,13 +1366,9 @@ static HRESULT WINAPI GST_Seeking_SetPositions(IMediaSeeking *iface,
         struct parser_source *flush_pin = filter->sources[i];
 
         flush_pin->need_segment = true;
-        flush_pin->eos = false;
 
         if (flush_pin->pin.pin.peer)
-        {
             LeaveCriticalSection(&flush_pin->flushing_cs);
-            WakeConditionVariable(&flush_pin->eos_cv);
-        }
     }
 
     return S_OK;
@@ -1546,7 +1541,7 @@ static HRESULT WINAPI GSTOutPin_DecideBufferSize(struct strmbase_source *iface,
 
     ret = amt_to_wg_format(&pin->pin.pin.mt, &format);
     assert(ret);
-    wg_parser_stream_enable(pin->wg_stream, &format);
+    wg_parser_stream_enable(pin->wg_stream, &format, NULL);
 
     /* We do need to drop any buffers that might have been sent with the old
      * caps, but this will be handled in parser_init_stream(). */
@@ -1613,7 +1608,6 @@ static struct parser_source *create_pin(struct parser *filter,
 
     InitializeCriticalSection(&pin->flushing_cs);
     pin->flushing_cs.DebugInfo->Spare[0] = (DWORD_PTR)(__FILE__ ": pin.flushing_cs");
-    InitializeConditionVariable(&pin->eos_cv);
 
     filter->sources[filter->source_count++] = pin;
     return pin;

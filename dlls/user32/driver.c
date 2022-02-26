@@ -124,6 +124,11 @@ static BOOL CDECL nulldrv_SetCursorPos( INT x, INT y )
     return TRUE;
 }
 
+static BOOL CDECL nulldrv_ClipCursor( LPCRECT clip )
+{
+    return TRUE;
+}
+
 static void CDECL nulldrv_UpdateClipboard(void)
 {
 }
@@ -225,6 +230,11 @@ static BOOL CDECL nulldrv_UpdateLayeredWindow( HWND hwnd, const UPDATELAYEREDWIN
     return TRUE;
 }
 
+static LRESULT CDECL nulldrv_WindowMessage( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam )
+{
+    return 0;
+}
+
 static BOOL CDECL nulldrv_WindowPosChanging( HWND hwnd, HWND insert_after, UINT swp_flags,
                                              const RECT *window_rect, const RECT *client_rect,
                                              RECT *visible_rect, struct window_surface **surface )
@@ -250,6 +260,11 @@ static void CDECL nulldrv_WindowPosChanged( HWND hwnd, HWND insert_after, UINT s
 static BOOL CDECL loaderdrv_SetCursorPos( INT x, INT y )
 {
     return load_driver()->pSetCursorPos( x, y );
+}
+
+static BOOL CDECL loaderdrv_ClipCursor( LPCRECT clip )
+{
+    return load_driver()->pClipCursor( clip );
 }
 
 static void CDECL loaderdrv_UpdateClipboard(void)
@@ -294,6 +309,11 @@ static BOOL CDECL loaderdrv_UpdateLayeredWindow( HWND hwnd, const UPDATELAYEREDW
     return load_driver()->pUpdateLayeredWindow( hwnd, info, window_rect );
 }
 
+static void CDECL loaderdrv_UpdateCandidatePos( HWND hwnd, const RECT *caret_rect )
+{
+    load_driver()->pUpdateCandidatePos( hwnd, caret_rect );
+}
+
 static struct user_driver_funcs lazy_load_driver =
 {
     { NULL },
@@ -312,7 +332,7 @@ static struct user_driver_funcs lazy_load_driver =
     NULL,
     NULL,
     loaderdrv_SetCursorPos,
-    NULL,
+    loaderdrv_ClipCursor,
     /* clipboard functions */
     loaderdrv_UpdateClipboard,
     /* display modes */
@@ -339,13 +359,15 @@ static struct user_driver_funcs lazy_load_driver =
     nulldrv_ShowWindow,
     nulldrv_SysCommand,
     loaderdrv_UpdateLayeredWindow,
-    NULL,
+    nulldrv_WindowMessage,
     nulldrv_WindowPosChanging,
     nulldrv_WindowPosChanged,
     /* system parameters */
     NULL,
     /* vulkan support */
     NULL,
+    /* candidate pos functions */
+    loaderdrv_UpdateCandidatePos,
     /* thread management */
     NULL
 };
@@ -367,6 +389,7 @@ void CDECL __wine_set_user_driver( const struct user_driver_funcs *funcs, UINT v
     do { if (!driver->p##name) driver->p##name = nulldrv_##name; } while(0)
 
     SET_USER_FUNC(SetCursorPos);
+    SET_USER_FUNC(ClipCursor);
     SET_USER_FUNC(UpdateClipboard);
     SET_USER_FUNC(CreateDesktopWindow);
     SET_USER_FUNC(CreateWindow);
@@ -386,6 +409,7 @@ void CDECL __wine_set_user_driver( const struct user_driver_funcs *funcs, UINT v
     SET_USER_FUNC(ShowWindow);
     SET_USER_FUNC(SysCommand);
     SET_USER_FUNC(UpdateLayeredWindow);
+    SET_USER_FUNC(WindowMessage);
     SET_USER_FUNC(WindowPosChanging);
     SET_USER_FUNC(WindowPosChanged);
 #undef SET_USER_FUNC
