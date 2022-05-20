@@ -1689,6 +1689,7 @@
 @ stdcall -import lstrlen(str)
 @ stdcall -import lstrlenA(str)
 @ stdcall -import lstrlenW(wstr)
+@ stdcall SetThreadInformation(long long ptr long)
 
 ################################################################
 # Wine internal extensions
