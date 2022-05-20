@@ -178,3 +178,19 @@ DWORD WINAPI KERNEL32_GetCurrentThreadId(void)
 {
     return HandleToULong(NtCurrentTeb()->ClientId.UniqueThread);
 }
+
+/***********************************************************************
+ *           SetThreadInformation   (KERNEL32.@)
+ */
+BOOL SetThreadInformation(HANDLE hThread,
+                           THREAD_INFORMATION_CLASS threadInformationClass,
+                           LPVOID threadInformation,
+                           DWORD threadInformationSize)
+{
+    FIXME("(%p, %u, %p, %u): stub\n",
+         hThread,
+         threadInformationClass,
+         threadInformation,
+         threadInformationSize);
+    return TRUE;
+}
